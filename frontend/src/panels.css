@@ -1,0 +1,130 @@
+/* Card tabs, charts dashboard, weather, news feed, street-level viewer and extra map controls. */
+
+/* ---------- six-tab card: scrollable strip ---------- */
+.card-tabs { overflow-x: auto; scrollbar-width: none; }
+.card-tabs::-webkit-scrollbar { display: none; }
+.card-tabs button { flex: 1 0 auto; padding-left: 10px; padding-right: 10px; }
+.actions button { font-size: 11.5px; }
+
+/* ---------- charts dashboard ---------- */
+.dashboard { display: flex; flex-direction: column; gap: 14px; }
+.mini { border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 6px; }
+.card-body > .mini { margin-top: 12px; }
+.mini header { padding: 0 4px 4px; }
+.mini h4 { margin: 0; font-size: 13.5px; font-weight: 500; }
+.mini header span { display: block; font-size: 11.5px; color: var(--muted); }
+.mini footer { padding: 2px 4px 0; font-size: 10.5px; color: var(--faint); }
+.mini-state { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 12.5px; text-align: center; }
+
+/* ---------- weather ---------- */
+.now { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: center; padding: 6px 2px 12px; }
+.now-icon { font-size: 44px; line-height: 1; }
+.now b { display: block; font-size: 32px; font-weight: 400; }
+.now span { color: var(--muted); text-transform: capitalize; }
+.now dl { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 8px; margin: 0; }
+.now dt { font-size: 11px; color: var(--muted); }
+.now dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; grid-row: 2; }
+.days { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(52px, 1fr); gap: 4px; overflow-x: auto; margin-bottom: 12px; scrollbar-width: thin; }
+.day { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 2px; border-radius: 10px; background: var(--surface-2); font-size: 12px; }
+.day i { font-style: normal; font-size: 20px; }
+.day b { font-weight: 500; }
+.day small { color: var(--muted); }
+.day em { font-style: normal; font-size: 10.5px; color: var(--accent); min-height: 14px; }
+
+/* ---------- news & events feed ---------- */
+.hint.first { margin: 0 0 4px; }
+.feed { list-style: none; margin: 0; padding: 0; }
+.feed li { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.feed li:last-child { border-bottom: 0; }
+.feed a { color: var(--text); text-decoration: none; font-weight: 500; font-size: 13px; line-height: 1.35; }
+.feed a:hover { color: var(--accent); text-decoration: underline; }
+.feed span { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.feed-dot { flex: none; width: 12px; height: 12px; margin-top: 3px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line-strong); padding: 0; }
+button.feed-dot { cursor: pointer; }
+button.feed-dot:hover { transform: scale(1.3); }
+.feed-dot.orange { background: #e8710a; }
+.feed-dot.red { background: #d93025; }
+.feed-dot.purple { background: #8430ce; }
+.feed-dot.grey { background: #9aa0a6; }
+.feed-dot.blue { background: #1a73e8; }
+
+/* ---------- street list in card ---------- */
+.street-summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12.5px; color: var(--muted); }
+.street-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.street-grid button { position: relative; padding: 0; border: 0; border-radius: 8px; overflow: hidden; cursor: pointer; aspect-ratio: 4 / 3; background: var(--surface-2); }
+.street-grid img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.2s; }
+.street-grid button:hover img { transform: scale(1.06); }
+.street-grid span { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 6px; font-size: 10.5px; color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, 0.7)); text-align: left; }
+.empty-block { padding: 8px 2px; }
+.empty-block p { margin: 0 0 6px; }
+code { font-size: 11.5px; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+
+/* ---------- street viewer overlay ---------- */
+.street { position: absolute; inset: 0; z-index: 45; background: #000; color: #fff; animation: card-in 0.15s ease-out; }
+.street-stage { position: absolute; inset: 0; }
+.pano, .flat { position: absolute; inset: 0; }
+.flat { display: grid; place-items: center; overflow: hidden; cursor: grab; touch-action: none; }
+.flat:active { cursor: grabbing; }
+.flat img { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; transition: transform 0.08s; }
+.street-loading {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 10px; align-items: center;
+  padding: 12px 18px; border-radius: 10px; background: rgba(0, 0, 0, 0.6);
+}
+.street-head {
+  position: absolute; top: 12px; left: 12px; display: flex; align-items: center; gap: 12px; padding: 6px 14px 6px 6px; border-radius: 28px;
+  background: rgba(32, 33, 36, 0.85); backdrop-filter: blur(6px); max-width: calc(100% - 24px);
+}
+.street-head strong { display: block; font-weight: 500; }
+.street-head span { font-size: 12px; color: #bdc1c6; }
+.icon-btn.on-dark { color: #e8eaed; }
+.icon-btn.on-dark:hover { background: rgba(255, 255, 255, 0.12); }
+.chip.dark { background: transparent; color: #8ab4f8; border-color: rgba(255, 255, 255, 0.25); text-decoration: none; height: 30px; font-size: 12.5px; }
+.street-arrows { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); display: flex; gap: 12px; }
+.street-arrows .ctrl { width: 48px; height: 48px; border-radius: 50%; }
+.street-arrows .ctrl:disabled { opacity: 0.35; cursor: default; }
+.street-dates {
+  position: absolute; left: 12px; right: 12px; bottom: 34px; display: flex; gap: 8px; align-items: center; overflow-x: auto;
+  padding: 8px 10px; border-radius: 12px; background: rgba(32, 33, 36, 0.85); scrollbar-width: thin;
+}
+.street-dates > span { flex: none; font-size: 12px; color: #bdc1c6; margin-right: 4px; }
+.street-dates button {
+  flex: none; position: relative; width: 84px; height: 56px; padding: 0; border: 2px solid transparent; border-radius: 8px;
+  overflow: hidden; cursor: pointer; background: #3c4043;
+}
+.street-dates button.on { border-color: #fbbc04; }
+.street-dates img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.street-dates b { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10.5px; font-weight: 500; background: rgba(0, 0, 0, 0.6); color: #fff; }
+.street-foot {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 26px; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #bdc1c6; background: rgba(0, 0, 0, 0.6);
+}
+.street .psv-container { background: #000; }
+
+/* ---------- controls additions ---------- */
+.ctrl.on { color: var(--accent); background: var(--accent-soft); }
+.ctrl.pegman.on { background: #fbbc04; color: #202124; }
+.compass-wrap { display: flex; align-items: center; gap: 2px; }
+.rot {
+  width: 18px; height: 28px; border: 0; padding: 0; border-radius: 6px; cursor: pointer; font-size: 18px; line-height: 1;
+  background: rgba(255, 255, 255, 0.85); color: var(--muted); box-shadow: var(--shadow-1);
+}
+.rot:hover { color: var(--text); background: #fff; }
+.controls .compass-wrap .ctrl { margin: 0 2px; }
+.shortcuts {
+  position: absolute; right: 52px; bottom: 0; width: 280px; padding: 12px 16px; border-radius: 14px;
+  background: var(--surface); box-shadow: var(--shadow-3);
+}
+.shortcuts h3 { margin: 0 0 8px; font-size: 13.5px; font-weight: 500; }
+.shortcuts dl { margin: 0; display: grid; gap: 4px; font-size: 12.5px; }
+.shortcuts dl div { display: flex; justify-content: space-between; gap: 10px; }
+.shortcuts dt { color: var(--muted); }
+.shortcuts dd { margin: 0; font-weight: 500; }
+.pegman-mode .globe canvas { cursor: crosshair; }
+
+@media (max-width: 760px) {
+  .controls .compass-wrap, .controls .ctrl.text { display: none; }
+  .street-arrows { bottom: 110px; }
+  .street-head .chip.dark { display: none; }
+  .now dl { grid-template-columns: repeat(2, 1fr); }
+  .now dd { grid-row: auto; }
+}

@@ -1,0 +1,17 @@
+# Render Blueprint: New > Blueprint in the Render dashboard, pick this repo, then fill in the env vars.
+services:
+  - type: web
+    name: earthos
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # An email or website, sent to OpenStreetMap Nominatim and MET Norway as their usage policies ask.
+      - key: NOMINATIM_CONTACT
+        sync: false
+      # Optional: free Mapillary client token for more street-level photos.
+      - key: MAPILLARY_TOKEN
+        sync: false
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "240"

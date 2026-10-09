@@ -1,0 +1,30 @@
+:root {
+  --surface: #ffffff;
+  --surface-2: #f1f3f4;
+  --hover: rgba(60, 64, 67, 0.08);
+  --line: #e8eaed;
+  --line-strong: #dadce0;
+  --text: #202124;
+  --muted: #5f6368;
+  --faint: #80868b;
+  --accent: #1a73e8;
+  --accent-strong: #1967d2;
+  --accent-soft: #e8f0fe;
+  --red: #d93025;
+  --amber: #e37400;
+  --shadow-1: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  --shadow-2: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  --shadow-3: 0 2px 3px rgba(60, 64, 67, 0.3), 0 6px 10px 4px rgba(60, 64, 67, 0.15);
+  color-scheme: light;
+  font-family: Roboto, 'Google Sans', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  background: #000;
+  -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #000; }
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
