@@ -283,16 +283,52 @@ select, input[type='number'] {
 .pill.weak { color: var(--muted); background: var(--surface-2); }
 
 /* ---------- small screens: card becomes a bottom sheet ---------- */
+/* ---------- phones: map-first layout with a draggable bottom sheet ---------- */
+.sheet-handle { display: none; }
 @media (max-width: 760px) {
+  .app { height: 100dvh; }
   .search { left: 8px; right: 8px; top: 8px; width: auto; }
-  .card { top: auto; left: 0; right: 0; bottom: 28px; width: auto; height: 56vh; border-radius: 16px 16px 0 0; }
+  .search-box input { font-size: 16px; } /* 16px stops iOS zooming into the field */
+  .icon-btn { width: 40px; height: 40px; }
+
+  .card {
+    top: auto; left: 0; right: 0; bottom: 28px; width: auto; border-radius: 16px 16px 0 0;
+    height: 55dvh; transition: height 0.25s ease; animation: none; box-shadow: 0 -2px 12px rgba(60, 64, 67, 0.25);
+  }
+  .sheet-peek .card { height: 176px; }
+  .sheet-half .card { height: 55dvh; }
+  .sheet-full .card { height: calc(100dvh - 72px); }
+  .sheet-handle { display: flex; justify-content: center; padding: 8px 0 2px; cursor: grab; touch-action: none; }
+  .sheet-handle span { width: 36px; height: 4px; border-radius: 2px; background: var(--line-strong); }
+  .card-head { padding-top: 6px; touch-action: none; }
+  .card-head h2 { font-size: 19px; }
+  .card-head p.coords { display: none; }
+  .actions { padding-top: 6px; padding-bottom: 8px; }
+  .actions button span { width: 36px; height: 36px; }
+  .sheet-peek .card-tabs, .sheet-peek .card-body { visibility: hidden; }
+
+  /* Map controls stay usable above a peeking sheet, and step aside when it is pulled up. */
   .layers, .with-card .layers { left: 8px; bottom: 36px; }
-  .with-card .layers, .with-card .datebar-wrap, .with-card .controls { display: none; }
-  .datebar-wrap { left: 50%; max-width: calc(100% - 16px); bottom: 124px; }
-  .layers-panel { width: calc(100vw - 16px); }
-  .controls { bottom: 36px; right: 8px; }
-  .ctrl.text, .ctrl.compass { display: none; }
+  .controls { bottom: 36px; right: 8px; gap: 8px; }
+  .datebar-wrap, .with-card .datebar-wrap { left: 50%; max-width: calc(100% - 16px); bottom: 124px; }
+  .sheet-peek .layers, .sheet-peek .controls { bottom: 216px; }
+  .sheet-peek .datebar-wrap { display: none; }
+  .sheet-half .layers, .sheet-half .datebar-wrap, .sheet-half .controls,
+  .sheet-full .layers, .sheet-full .datebar-wrap, .sheet-full .controls { display: none; }
+  .layers-btn { width: 60px; height: 60px; }
+  .layers-panel { width: calc(100vw - 16px); bottom: 72px; max-height: 60dvh; overflow-y: auto; }
+  .ctrl { width: 44px; height: 44px; }
+  .ctrl.text, .compass-wrap, .controls > .ctrl:first-child { display: none; }
+  .status { height: 28px; }
   .status span:nth-child(2) { display: none; }
   .compare-labels, .with-card .compare-labels { left: 8px; right: 8px; top: 64px; }
-  .globe .cesium-viewer-bottom { right: 8px; }
+  .globe .cesium-viewer-bottom { right: 8px; bottom: 32px; }
+  .sheet-half .sharp, .sheet-full .sharp { display: none; }
+  .tour-card { max-width: calc(100vw - 24px); }
+}
+}
+
+.globe-loading {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px;
+  color: #e8eaed; background: radial-gradient(circle at 50% 45%, #13233f 0, #05080f 60%); font-size: 14px;
 }

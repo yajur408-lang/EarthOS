@@ -31,6 +31,8 @@ CACHE_DIR = Path(os.environ.get("CACHE_DIR", _BACKEND / "data" / "cache"))
 # Built frontend to serve from the same origin (one service, one URL). Ignored if missing.
 FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", _BACKEND.parent / "frontend" / "dist"))
 RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "240"))
+# Example places whose satellite record is downloaded in the background at startup, so they open instantly.
+PREWARM_PLACES = [p for p in os.environ.get("PREWARM_PLACES", "guanacaste").split(",") if p.strip()]
 
 
 def key_status() -> dict[str, bool]:

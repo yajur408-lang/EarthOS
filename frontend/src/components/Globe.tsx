@@ -28,7 +28,8 @@ import {
 } from 'cesium'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { GIBS_ACK, MAX_LEVEL, layerById, type GibsLayer } from '../layers'
-import { createTerrainProvider } from '../terrain'
+import { PROFILE } from '../perf'
+import { createTerrainProvider, setTerrainRedraw } from '../terrain'
 
 export interface LayerSpec {
   layerId: string
@@ -274,14 +275,21 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       fullscreenButton: false,
       infoBox: false,
       selectionIndicator: false,
-      // Render at the screen's real pixel density so imagery stays crisp on high-DPI displays.
+      // Pixel density is set explicitly below, capped per device class.
       useBrowserRecommendedResolution: false,
+      // Only redraw when something changes (camera, tiles, entities) instead of 60 times a second.
+      requestRenderMode: true,
+      maximumRenderTimeChange: Infinity,
+      msaaSamples: PROFILE.antialias ? 4 : 1,
     })
     const scene = viewer.scene
+    setTerrainRedraw(() => !viewer.isDestroyed() && scene.requestRender())
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, PROFILE.maxPixelRatio) / (window.devicePixelRatio || 1)
+    scene.postProcessStages.fxaa.enabled = false // MSAA (desktop) is sharper and cheaper than FXAA
     scene.globe.baseColor = Color.fromCssColorString('#0b1220')
     scene.backgroundColor = Color.BLACK
     scene.globe.depthTestAgainstTerrain = true
-    scene.globe.maximumScreenSpaceError = 1.25 // load finer imagery/terrain levels than Cesium's default (2)
+    scene.globe.maximumScreenSpaceError = PROFILE.screenSpaceError
     scene.screenSpaceCameraController.inertiaSpin = 0.93
     scene.screenSpaceCameraController.inertiaTranslate = 0.93
     scene.screenSpaceCameraController.inertiaZoom = 0.85
@@ -429,6 +437,7 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     const viewer = viewerRef.current
     if (!viewer) return
     viewer.terrainProvider = terrain ? createTerrainProvider() : new EllipsoidTerrainProvider()
+    viewer.scene.requestRender()
   }, [terrain])
 
   // Reconcile imagery layers with the requested stack (bottom to top).
@@ -456,11 +465,14 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         s.split === 'left' ? SplitDirection.LEFT : s.split === 'right' ? SplitDirection.RIGHT : SplitDirection.NONE
       viewer.imageryLayers.raiseToTop(il)
     }
+    viewer.scene.requestRender()
   }, [layers])
 
   useEffect(() => {
     const viewer = viewerRef.current
-    if (viewer) viewer.scene.splitPosition = split
+    if (!viewer) return
+    viewer.scene.splitPosition = split
+    viewer.scene.requestRender()
   }, [split, splitActive])
 
   // Dropped pin and the box the NDVI statistics are averaged over.
@@ -469,6 +481,7 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     if (!viewer) return
     for (const e of pinEntities.current) viewer.entities.remove(e)
     pinEntities.current = []
+    viewer.scene.requestRender()
     if (!pin) return
     pinEntities.current.push(viewer.entities.add({
       position: Cartesian3.fromDegrees(pin.lon, pin.lat),
@@ -490,6 +503,7 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         },
       }))
     }
+    viewer.scene.requestRender()
   }, [pin])
 
   // Clickable markers (street-level photos, natural events, earthquakes).
@@ -513,6 +527,7 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         disableDepthTestDistance: Number.POSITIVE_INFINITY, distanceDisplayCondition: new DistanceDisplayCondition(0, 2_500_000),
       } : undefined,
     }))
+    viewer.scene.requestRender()
   }, [markers])
 
   return (

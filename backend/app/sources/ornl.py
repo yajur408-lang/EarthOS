@@ -8,6 +8,9 @@ Docs: https://modis.ornl.gov/data/modis_webservice.html
 from __future__ import annotations
 
 import asyncio
+import heapq
+import itertools
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
@@ -17,8 +20,59 @@ from ..cache import cached_json
 
 BASE = "https://modis.ornl.gov/rst/api/v1"
 CHUNK = 10
-# Shared across every request so parallel chart loads don't hammer the service.
-_SEM = asyncio.Semaphore(6)
+
+
+class _PriorityLimiter:
+    """A semaphore that hands free slots to the most urgent waiter (lowest priority value first).
+
+    Slots are handed out a moment after requests arrive, so a whole batch (e.g. both bands of
+    a series) is queued and ranked before any slot is given away.
+    """
+
+    def __init__(self, slots: int, gather_s: float = 0.02):
+        self.free = slots
+        self.gather_s = gather_s
+        self.waiters: list[tuple[float, int, asyncio.Future]] = []
+        self.seq = itertools.count()
+        self._dispatch_handle: asyncio.TimerHandle | None = None
+
+    @asynccontextmanager
+    async def slot(self, priority: float = 0):
+        fut = asyncio.get_running_loop().create_future()
+        heapq.heappush(self.waiters, (priority, next(self.seq), fut))
+        self._schedule()
+        try:
+            await fut
+        except asyncio.CancelledError:
+            if fut.done() and not fut.cancelled():
+                self._release()  # handed a slot just as we were cancelled
+            raise
+        try:
+            yield
+        finally:
+            self._release()
+
+    def _schedule(self):
+        if self._dispatch_handle is None:
+            self._dispatch_handle = asyncio.get_running_loop().call_later(self.gather_s, self._dispatch)
+
+    def _dispatch(self):
+        self._dispatch_handle = None
+        while self.free > 0 and self.waiters:
+            _, _, fut = heapq.heappop(self.waiters)
+            if not fut.done():
+                self.free -= 1
+                fut.set_result(None)
+
+    def _release(self):
+        self.free += 1
+        self._schedule()
+
+
+# Shared across every request so parallel chart loads don't hammer the service. ORNL's own
+# latency (20-60 s per request) dominates; more parallelism mostly earns 502s. Newer chunks
+# go first (across all bands), so the quick recent-years view is never stuck behind old years.
+_LIMIT = _PriorityLimiter(8)
 
 NDVI_SCALE = 0.0001
 VI_FILL = -3000
@@ -46,18 +100,21 @@ def _key(*parts: object) -> str:
     return "_".join(str(p) for p in parts)
 
 
-async def _get(client: httpx.AsyncClient, product: str, path: str, params: dict) -> dict:
+async def _get(client: httpx.AsyncClient, product: str, path: str, params: dict, priority: float = 0) -> dict:
     for attempt in range(4):
         try:
-            async with _SEM:
+            async with _LIMIT.slot(priority):
                 r = await client.get(f"{BASE}/{product}/{path}", params=params,
                                      headers={"Accept": "application/json"}, timeout=90)
+            if r.status_code >= 500:  # ORNL sheds load with 502/503 under pressure; retry those
+                raise httpx.HTTPStatusError(f"ORNL {r.status_code}", request=r.request, response=r)
             r.raise_for_status()
             return r.json()
-        except (httpx.TransportError, ValueError):
-            if attempt == 3:
+        except (httpx.TransportError, httpx.HTTPStatusError, ValueError) as e:
+            retriable = not isinstance(e, httpx.HTTPStatusError) or e.response.status_code >= 500
+            if attempt == 3 or not retriable:
                 raise
-            await asyncio.sleep(2 ** attempt)
+            await asyncio.sleep(2 ** attempt + 1)
     raise RuntimeError("unreachable")
 
 
@@ -74,9 +131,13 @@ async def band_series(product: str, band: str, lat: float, lon: float, km: int,
     """[(modis_date, calendar_date, pixel values)] for every date in the year range."""
     lat, lon = round(lat, 4), round(lon, 4)
     async with httpx.AsyncClient() as client:
-        dates = await available_dates(client, product, lat, lon)
-        dates = [d for d in dates if start_year <= int(d["modis_date"][1:5]) <= end_year]
-        chunks = [dates[i:i + CHUNK] for i in range(0, len(dates), CHUNK)]
+        all_dates = await available_dates(client, product, lat, lon)
+        # Chunk on fixed positions in the product's full date list, so any year range reuses the same
+        # cached chunks (a quick 2-year view and the 10-year record share their overlap).
+        blocks = [all_dates[i:i + CHUNK] for i in range(0, len(all_dates), CHUNK)]
+        in_range = lambda d: start_year <= int(d["modis_date"][1:5]) <= end_year  # noqa: E731
+        chunks = [b for b in blocks if any(in_range(d) for d in b)]
+        dates = [d for d in all_dates if in_range(d)]
 
         async def chunk(c):
             async def fetch():
@@ -84,11 +145,12 @@ async def band_series(product: str, band: str, lat: float, lon: float, km: int,
                     "latitude": lat, "longitude": lon, "band": band,
                     "startDate": c[0]["modis_date"], "endDate": c[-1]["modis_date"],
                     "kmAboveBelow": km, "kmLeftRight": km,
-                })
+                }, priority=-int(c[-1]["modis_date"][1:]))  # A2026161 -> -2026161: newest first
                 return data["subset"]
             return await cached_json(_key("subset", lat, lon, km, band, c[0]["modis_date"], c[-1]["modis_date"]), fetch)
 
-        results = await asyncio.gather(*(chunk(c) for c in chunks))
+        # Newest first: the quick recent-years view shares these chunks, so it finishes as early as possible.
+        results = await asyncio.gather(*(chunk(c) for c in reversed(chunks)))
     by_date = {s["modis_date"]: s for r in results for s in r}
     return [(d["modis_date"], d["calendar_date"], np.asarray(by_date[d["modis_date"]]["data"], dtype=float))
             for d in dates if d["modis_date"] in by_date]

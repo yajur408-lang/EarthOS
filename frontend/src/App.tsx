@@ -1,28 +1,33 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type AnomalyEvent, type EventsResult, type Place, type Series, type StreetImage, type StreetNearby } from './api'
 import DateBar, { type CompareState } from './components/DateBar'
-import Globe, { type GlobeHandle, type LayerSpec, type Marker, type ViewState } from './components/Globe'
+import type { GlobeHandle, LayerSpec, Marker, ViewState } from './components/Globe'
 import LayersPanel from './components/LayersPanel'
-import Licences from './components/Licences'
 import MapControls from './components/MapControls'
-import PlaceCard, { type CardTab, type ExportKind, type Options, type PlaceInfo } from './components/PlaceCard'
+import PlaceCard, { type CardTab, type ExportKind, type Options, type PlaceInfo, type Sheet } from './components/PlaceCard'
 import SearchBar, { type SearchPick } from './components/SearchBar'
-import Tour, { type TourStep } from './components/Tour'
+import type { TourStep } from './components/Tour'
 import Icon from './components/Icon'
-import ReportView from './components/ReportView'
 import {
   buildReport, downloadReportHtml, exportChartImages, exportCsv, exportGeoJson, exportJson, exportPng, exportSavedPlaces,
   loadSaved, readShareUrl, shareUrl, storeSaved, type SavedPlace,
 } from './exporters'
 import { GIBS_ACK } from './layers'
-import StreetView from './components/StreetView'
 import { createBus, useBus, type Bus } from './bus'
 import { layerById } from './layers'
 import { useFetch } from './useFetch'
 import { useSharpImagery } from './useSharpImagery'
+import { PROFILE } from './perf'
 import SharpChip from './components/SharpChip'
 import { fmtDistance, fmtLatLon, isoDaysAgo, shiftDate } from './util'
 import './App.css'
+
+// Heavy pieces load on demand so the page's controls appear immediately.
+const Globe = lazy(() => import('./components/Globe')) // CesiumJS, ~4 MB
+const StreetView = lazy(() => import('./components/StreetView')) // panorama viewer + three.js
+const ReportView = lazy(() => import('./components/ReportView'))
+const Licences = lazy(() => import('./components/Licences'))
+const Tour = lazy(() => import('./components/Tour'))
 import './panels.css'
 import './extras.css'
 
@@ -45,6 +50,7 @@ export default function App() {
   const [examples, setExamples] = useState<Place[]>([])
   const [place, setPlace] = useState<PlaceInfo | null>(() =>
     link ? { lat: +link.lat.toFixed(5), lon: +link.lon.toFixed(5), km: link.km, name: null, label: null, country: null } : null)
+  const [sheet, setSheet] = useState<Sheet>('peek')
   const [tab, setTab] = useState<CardTab>(() =>
     link?.tab && ['overview', 'charts', 'anomalies', 'street', 'weather', 'news'].includes(link.tab) ? (link.tab as CardTab) : 'overview')
   const [options, setOptions] = useState<Options>({ start: THIS_YEAR - 9, end: THIS_YEAR, z: 2, drop: 0.1 })
@@ -79,8 +85,13 @@ export default function App() {
     const la = +link.lat.toFixed(5), lo = +link.lon.toFixed(5)
     api.reverse(link.lat, link.lon).then((r) => r && setPlace((p) => (p && p.lat === la && p.lon === lo && !p.name
       ? { ...p, name: r.name, label: r.label, country: r.country ?? null } : p))).catch(() => {})
-    const t = setTimeout(() => globe.current?.flyTo(link.lat, link.lon, 25_000), 600)
-    return () => clearTimeout(t)
+    // The globe loads lazily, so wait until it exists before flying there.
+    const t = setInterval(() => {
+      if (!globe.current) return
+      clearInterval(t)
+      globe.current.flyTo(link.lat, link.lon, 25_000)
+    }, 250)
+    return () => clearInterval(t)
   }, [link])
 
   useEffect(() => {
@@ -94,18 +105,35 @@ export default function App() {
     start_year: options.start, end_year: options.end, z: options.z, drop: options.drop,
   }, [pLat, pLon, pKm, options])
   const queryKey = query ? JSON.stringify(query) : null
+  // Progressive loading: ORNL answers slowly (20-60 s per request), so ask for the last ~2 years first and
+  // show them while the full record (needed for seasonal statistics) keeps loading. The server shares
+  // the overlapping downloads, so the quick request adds no extra work.
+  const [quick, setQuick] = useState<{ key: string; series: Series } | null>(null)
   useEffect(() => {
     if (!query || !queryKey) return
     const ctrl = new AbortController()
-    api.series(query, ctrl.signal)
+    const loadFull = () => api.series(query, ctrl.signal)
       .then((s) => setResult({ key: queryKey, series: s }))
       .catch((e: Error) => !ctrl.signal.aborted && setResult({ key: queryKey, error: e.message }))
+    // ORNL shares its time across everything we ask for, so asking for old years in parallel slows the
+    // recent ones. Ask for the current year first (plus last year in Jan-Mar, ~4 requests, ~20 s), show it,
+    // then load the full record, which reuses those downloads.
+    const quickStart = Math.max(query.start_year, query.end_year - (new Date().getUTCMonth() < 3 ? 1 : 0))
+    if (quickStart > query.start_year) {
+      api.series({ ...query, start_year: quickStart }, ctrl.signal)
+        .then((s) => setQuick({ key: queryKey, series: s }))
+        .catch(() => { /* the full request below reports any error */ })
+        .finally(() => !ctrl.signal.aborted && loadFull())
+    } else {
+      loadFull()
+    }
     return () => ctrl.abort()
   }, [query, queryKey])
   const current = result && result.key === queryKey ? result : null
-  const series = current?.series ?? null
+  const partial = !current?.series && quick?.key === queryKey ? quick.series : null
+  const series = current?.series ?? partial
   const error = current?.error ?? null
-  const loading = !!queryKey && !current
+  const loading = !!queryKey && !current?.series && !current?.error
   const focusIndex = focus && focus.key === queryKey ? focus.index : null
   const setFocusIndex = (i: number | null) => setFocus(i == null || !queryKey ? null : { key: queryKey, index: i })
 
@@ -129,6 +157,7 @@ export default function App() {
     km?: number, country: string | null = null) => {
     const la = round5(lat), lo = round5(lon)
     setPlace((prev) => ({ lat: la, lon: lo, km: km ?? prev?.km ?? 1, name, label, country }))
+    setSheet('peek')
     if (name == null || country == null) {
       // Name the dropped pin like Maps does; failure just leaves "Dropped pin".
       api.reverse(lat, lon).then((r) => r && setPlace((p) => (p && p.lat === la && p.lon === lo
@@ -205,7 +234,7 @@ export default function App() {
 
   const stack = useMemo<LayerSpec[]>(() => {
     const out: LayerSpec[] = [{ layerId: base, date }]
-    for (const p of sharpOn ? [sharp.fill, sharp.pass] : []) {
+    for (const p of sharpOn ? [PROFILE.sharpFill ? sharp.fill : null, sharp.pass] : []) {
       if (p) out.push({ layerId: p.sensor === 'S30' ? 'hls-s30' : 'hls-l30', date: p.date, minLevel: 9 })
     }
     if (compare.on) {
@@ -325,9 +354,11 @@ export default function App() {
 
 
   return (
-    <div className={`app ${place ? 'with-card' : ''} ${pegman ? 'pegman-mode' : ''}`}>
+    <div className={`app ${place ? `with-card sheet-${sheet}` : ''} ${pegman ? 'pegman-mode' : ''}`}>
+      <Suspense fallback={<div className="globe-loading"><span className="spinner" aria-hidden /> Loading the globe…</div>}>
       <Globe ref={globe} layers={stack} splitActive={compare.on} pin={pin} markers={markers} terrain={terrain}
         onPick={onPick} onMarker={onMarker} onCursor={cursorBus.set} onView={viewBus.set} />
+      </Suspense>
 
       <SearchBar examples={examples} saved={saved} onExportSaved={() => exportSavedPlaces(saved)} title={place ? place.name ?? fmtLatLon(place.lat, place.lon) : null}
         onPick={onSearch} onClear={() => setPlace(null)} />
@@ -346,6 +377,7 @@ export default function App() {
           onOpenStreet={setStreetOpen}
           onFly={(lat, lon) => globe.current?.flyTo(lat, lon, 120_000, -45)}
           saved={isSaved} onToggleSave={toggleSave} onShare={share} onExport={onExport}
+          sheet={sheet} onSheet={setSheet}
           onClose={() => setPlace(null)}
         />
       )}
@@ -381,20 +413,21 @@ export default function App() {
 
       <StatusBar cursor={cursorBus} view={viewBus} terrain={terrain} onLicences={() => setShowLicences(true)} />
 
-      {streetOpen && street.data && (
-        <StreetView origin={{ lat: place?.lat ?? streetOpen.lat, lon: place?.lon ?? streetOpen.lon }} images={street.data.items} start={streetOpen} attribution={street.data.attribution}
-          onChange={setStreetOpen} onClose={() => setStreetOpen(null)} />
-      )}
-
-      <button className="tour-btn" onClick={() => setTouring(true)} title="Show the guided tour">
+      <button className="tour-btn" onClick={() => setTouring(true)} title="Show the guided tour" aria-label="Tutorial">
         <Icon name="school" size={18} /> Tutorial
       </button>
 
-      {showLicences && <Licences onClose={() => setShowLicences(false)} />}
-      {touring && <Tour steps={tourSteps} onClose={endTour} />}
-      {report && place && (
-        <ReportView html={report} onDownload={() => downloadReportHtml(place, report)} onClose={() => setReport(null)} />
-      )}
+      <Suspense fallback={null}>
+        {streetOpen && street.data && (
+          <StreetView origin={{ lat: place?.lat ?? streetOpen.lat, lon: place?.lon ?? streetOpen.lon }} images={street.data.items} start={streetOpen} attribution={street.data.attribution}
+            onChange={setStreetOpen} onClose={() => setStreetOpen(null)} />
+        )}
+        {showLicences && <Licences onClose={() => setShowLicences(false)} />}
+        {touring && <Tour steps={tourSteps} onClose={endTour} />}
+        {report && place && (
+          <ReportView html={report} onDownload={() => downloadReportHtml(place, report)} onClose={() => setReport(null)} />
+        )}
+      </Suspense>
     </div>
   )
 }

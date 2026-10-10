@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type AnomalyEvent, type EventsResult, type Series, type StreetImage, type StreetNearby } from '../api'
 import { fmt, fmtLatLon, prettyDate } from '../util'
-import Dashboard from './Dashboard'
 import Icon from './Icon'
 import { NewsPanel, Stat, TerrainSection, WeatherPanel } from './Panels'
+
+const Dashboard = lazy(() => import('./Dashboard'))
 
 export interface PlaceInfo {
   lat: number
@@ -65,7 +66,12 @@ interface Props {
   onShare: () => Promise<boolean>
   onExport: (kind: ExportKind) => Promise<void>
   onClose: () => void
+  /** Phone layout: how far the bottom sheet is pulled up. */
+  sheet: Sheet
+  onSheet: (s: Sheet) => void
 }
+
+export type Sheet = 'peek' | 'half' | 'full'
 
 export type ExportKind = 'csv' | 'json' | 'geojson' | 'png' | 'charts' | 'report'
 
@@ -109,9 +115,54 @@ export default function PlaceCard(props: Props) {
 
   const nearestStreet = props.street.data?.items[0]
 
+  // Drag the sheet (phones): follow the finger, then snap to the nearest of peek / half / full.
+  const cardRef = useRef<HTMLElement>(null)
+  const drag = useRef<{ y: number; h: number; moved: boolean } | null>(null)
+  const snapHeights = () => {
+    const vh = window.innerHeight
+    return { peek: 176, half: Math.round(vh * 0.55), full: vh - 72 }
+  }
+  const dragHandlers = {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (!window.matchMedia('(max-width: 760px)').matches || (e.target as HTMLElement).closest('button')) return
+      drag.current = { y: e.clientY, h: cardRef.current?.getBoundingClientRect().height ?? 0, moved: false }
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const d = drag.current
+      const card = cardRef.current
+      if (!d || !card) return
+      const dy = d.y - e.clientY
+      if (Math.abs(dy) > 6) d.moved = true
+      card.style.transition = 'none'
+      card.style.height = `${Math.min(Math.max(d.h + dy, 120), window.innerHeight - 64)}px`
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      const d = drag.current
+      const card = cardRef.current
+      drag.current = null
+      if (!d || !card) return
+      card.style.transition = ''
+      card.style.height = ''
+      const snaps = snapHeights()
+      if (!d.moved) {
+        // A tap on the handle or the title toggles between peek and half, like Google Maps.
+        if ((e.target as HTMLElement).closest('.sheet-handle, .card-head')) props.onSheet(props.sheet === 'peek' ? 'half' : 'peek')
+        return
+      }
+      const h = d.h + (d.y - e.clientY)
+      const best = (Object.entries(snaps) as [Sheet, number][]).reduce((a, b) => (Math.abs(b[1] - h) < Math.abs(a[1] - h) ? b : a))
+      props.onSheet(best[0])
+    },
+  }
+
   return (
-    <aside className="card" aria-label="Place details">
-      <header className="card-head">
+    <aside className="card" aria-label="Place details" ref={cardRef}>
+      <div className="sheet-handle" {...dragHandlers} role="button" tabIndex={0} aria-label={props.sheet === 'peek' ? 'Expand details' : 'Collapse details'}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && props.onSheet(props.sheet === 'peek' ? 'half' : 'peek')}>
+        <span />
+      </div>
+      <header className="card-head" {...dragHandlers}>
         <div>
           <h2>{place.name ?? 'Dropped pin'}</h2>
           <p>{place.label ?? fmtLatLon(place.lat, place.lon)}</p>
@@ -134,7 +185,7 @@ export default function PlaceCard(props: Props) {
 
       <nav className="card-tabs" role="tablist">
         {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => onTab(t.id)}>
+          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => { onTab(t.id); if (props.sheet === 'peek') props.onSheet('half') }}>
             {t.label}
             {t.id === 'anomalies' && stats ? <em>{stats.events.length}</em> : null}
           </button>
@@ -146,15 +197,24 @@ export default function PlaceCard(props: Props) {
           <div className="loading">
             <span className="spinner" aria-hidden />
             <div>
-              <strong>Fetching satellite record…</strong>
-              <span>The first visit to a place downloads every MODIS composite (about 10–20 s per year). Later visits are instant.</span>
+              {series ? (
+                <>
+                  <strong>Showing the last {series.query.end_year - series.query.start_year + 1} years…</strong>
+                  <span>Still loading the full {props.options.end - props.options.start + 1}-year record, which the seasonal normal range and anomaly statistics need.</span>
+                </>
+              ) : (
+                <>
+                  <strong>Fetching satellite record…</strong>
+                  <span>NASA's MODIS service is slow on a first visit, so recent data appears first and the full record follows. Later visits are instant.</span>
+                </>
+              )}
             </div>
           </div>
         )}
         {needsSeries && error && <div className="alert">{error}</div>}
         {needsSeries && series?.ndvi.error && <div className="alert soft">NDVI: {series.ndvi.error}</div>}
         {needsSeries && series?.climate.error && <div className="alert soft">Climate: {series.climate.error}</div>}
-        {needsSeries && stats?.warnings.map((w) => <div key={w} className="alert soft">{w}</div>)}
+        {needsSeries && !loading && stats?.warnings.map((w) => <div key={w} className="alert soft">{w}</div>)}
 
         {tab === 'overview' && (
           <>
@@ -197,7 +257,9 @@ export default function PlaceCard(props: Props) {
 
         {tab === 'charts' && series && (
           <>
-            <Dashboard series={series} km={place.km} focus={focused} cursorDate={date} onDate={onDate} />
+            <Suspense fallback={<p className="hint">Loading charts…</p>}>
+              <Dashboard series={series} km={place.km} focus={focused} cursorDate={date} onDate={onDate} />
+            </Suspense>
             <OptionsForm {...props} />
           </>
         )}

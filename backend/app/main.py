@@ -7,8 +7,12 @@ Run:  uvicorn app.main:app --reload --port 8000
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
+import logging
 import math
+import mimetypes
+from pathlib import Path as FsPath
 from dataclasses import asdict
 
 import httpx
@@ -16,6 +20,7 @@ from fastapi import FastAPI, HTTPException, Path, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from . import analysis, config
 from .ratelimit import RateLimit
@@ -23,7 +28,37 @@ from .datasets import DATASETS
 from .places import PLACES
 from .sources import events, hls, nominatim, ornl, power, street, terrain, weather
 
-app = FastAPI(title="EarthOS API", version="0.2.0")
+log = logging.getLogger("uvicorn.error")
+
+
+async def _prewarm():
+    """Download the example places' satellite records in the background so they open instantly."""
+    await asyncio.sleep(3)
+    year = dt.date.today().year
+    for pid in config.PREWARM_PLACES:
+        p = next((p for p in PLACES if p["id"] == pid.strip()), None)
+        if not p:
+            continue
+        try:
+            await asyncio.gather(
+                ornl.ndvi_series(p["lat"], p["lon"], p["km"], year - 9, year),
+                power.daily_climate(p["lat"], p["lon"], (dt.date(year - 9, 1, 1) - dt.timedelta(days=analysis.ANTECEDENT_DAYS)).isoformat(), f"{year}-12-31"),
+            )
+            log.info("prewarmed %s", pid)
+        except Exception as e:  # best effort: a slow upstream must never block startup
+            log.warning("prewarm %s failed: %s", pid, e)
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app):
+    task = asyncio.create_task(_prewarm())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="EarthOS API", version="0.3.0", lifespan=lifespan)
+# Compress API JSON and the multi-MB JS bundles (roughly 4x smaller on the wire).
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 app.add_middleware(CORSMiddleware, allow_origins=config.ALLOWED_ORIGINS, allow_methods=["GET"], allow_headers=["*"])
 app.add_middleware(RateLimit, per_minute=config.RATE_LIMIT_PER_MINUTE)
 
@@ -238,8 +273,28 @@ async def sharp_imagery(lat: float = LatQ, lon: float = LonQ, days: int = Query(
 # ---------- serve the built frontend (production: one service, one URL) ----------
 if (config.FRONTEND_DIST / "index.html").exists():
     _DIST = config.FRONTEND_DIST.resolve()
-    app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="assets")
-    app.mount("/cesiumStatic", StaticFiles(directory=_DIST / "cesiumStatic"), name="cesium")
+    class _CachedStatic(StaticFiles):
+        """Vite assets have content hashes in their names, so browsers may cache them for a year."""
+
+        def __init__(self, *a, max_age: int, **kw):
+            super().__init__(*a, **kw)
+            self.max_age = max_age
+
+        async def get_response(self, path, scope):
+            # Serve a pre-compressed .gz twin (made at Docker build time) when the browser accepts gzip.
+            accepts = b"gzip" in dict(scope.get("headers", [])).get(b"accept-encoding", b"")
+            gz = FsPath(self.directory) / f"{path}.gz"
+            if accepts and gz.is_file() and FsPath(self.directory).resolve() in gz.resolve().parents:
+                media = mimetypes.guess_type(path)[0] or "application/octet-stream"
+                resp = FileResponse(gz, media_type=media, headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+            else:
+                resp = await super().get_response(path, scope)
+            if resp.status_code == 200:
+                resp.headers["Cache-Control"] = f"public, max-age={self.max_age}" + (", immutable" if self.max_age > 86400 else "")
+            return resp
+
+    app.mount("/assets", _CachedStatic(directory=_DIST / "assets", max_age=31_536_000), name="assets")
+    app.mount("/cesiumStatic", _CachedStatic(directory=_DIST / "cesiumStatic", max_age=7 * 86400), name="cesium")
 
     # GET and HEAD: hosts and uptime monitors probe the site with HEAD requests.
     @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
