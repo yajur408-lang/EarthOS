@@ -24,11 +24,22 @@ export function rankPasses(passes: HlsPass[]): HlsPass[] {
  */
 export function useSharpImagery(view: Bus<ViewState>, enabled: boolean) {
   const [anchor, setAnchor] = useState<{ lat: number; lon: number } | null>(null)
-  useEffect(() => view.subscribe((v) => {
-    if (!enabled || !v.centre || v.heightM > SHARP_BELOW_M) return
-    const c = { lat: +v.centre.lat.toFixed(2), lon: +v.centre.lon.toFixed(2) }
-    setAnchor((prev) => (!prev || km(prev, c) > REQUERY_KM ? c : prev))
-  }), [view, enabled])
+  useEffect(() => {
+    // Wait until the camera settles: during a fly-to the centre sweeps hundreds of km.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const off = view.subscribe((v) => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (!enabled || !v.centre || v.heightM > SHARP_BELOW_M) return
+        const c = { lat: +v.centre.lat.toFixed(2), lon: +v.centre.lon.toFixed(2) }
+        setAnchor((prev) => (!prev || km(prev, c) > REQUERY_KM ? c : prev))
+      }, 500)
+    })
+    return () => {
+      clearTimeout(timer)
+      off()
+    }
+  }, [view, enabled])
 
   const key = enabled && anchor ? `${anchor.lat},${anchor.lon}` : null
   const res = useFetch(key, (s) => api.sharp(anchor!.lat, anchor!.lon, s))
