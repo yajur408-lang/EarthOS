@@ -2,7 +2,7 @@
 // - Skips starting it when something already answers on the API port (e.g. a backend you started yourself).
 // - Restarts it when backend Python files change (Vite's polling watcher works in OneDrive folders).
 // - Stops it when the dev server exits. Set BACKEND_AUTOSTART=0 to turn this off.
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import type { Plugin, ViteDevServer } from 'vite'
@@ -15,6 +15,13 @@ function findPython(backendDir: string): string {
     path.join(backendDir, '.venv', 'bin', 'python'), // macOS / Linux venv
   ]
   return candidates.find((p) => existsSync(p)) ?? (process.platform === 'win32' ? 'python' : 'python3')
+}
+
+/** Kill a process and its children. On Windows a venv's python.exe is a launcher that starts the real
+ * interpreter as a child, so killing only the launcher would leave the old server holding the port. */
+function killTree(p: ChildProcess) {
+  if (process.platform === 'win32' && p.pid) spawnSync('taskkill', ['/pid', String(p.pid), '/T', '/F'], { stdio: 'ignore' })
+  else p.kill()
 }
 
 async function apiIsUp(): Promise<boolean> {
@@ -66,11 +73,13 @@ export function backendDevServer(): Plugin {
           child = null
         })
       }
-      const stop = () => {
+      const stop = async () => {
         if (!child) return
         stopping = true
-        child.kill()
+        killTree(child)
         child = null
+        // Wait until the old server has released the port before starting the new one.
+        for (let i = 0; i < 25 && (await apiIsUp()); i++) await new Promise((r) => setTimeout(r, 200))
         stopping = false
       }
 
@@ -79,20 +88,22 @@ export function backendDevServer(): Plugin {
 
       // Restart on backend code changes.
       server.watcher.add(path.join(backendDir, 'app'))
-      server.watcher.on('change', (file) => {
-        if (!file.startsWith(path.join(backendDir, 'app')) || !file.endsWith('.py')) return
+      const onFile = (file: string) => {
+        if (!file.startsWith(path.join(backendDir, 'app')) || !/\.(py|toml)$/.test(file)) return
         clearTimeout(restartTimer)
-        restartTimer = setTimeout(() => {
+        restartTimer = setTimeout(async () => {
           log.info(`  [api] ${path.relative(backendDir, file)} changed; restarting backend`)
-          stop()
+          await stop()
           start()
         }, 300)
-      })
+      }
+      server.watcher.on('change', onFile)
+      server.watcher.on('add', onFile)
 
       const shutdown = () => {
         clearTimeout(restartTimer)
         stopping = true
-        child?.kill()
+        if (child) killTree(child)
       }
       server.httpServer?.once('close', shutdown)
       process.once('exit', shutdown)

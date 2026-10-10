@@ -13,5 +13,11 @@ services:
       # Optional: free Mapillary client token for more street-level photos.
       - key: MAPILLARY_TOKEN
         sync: false
+      # Free NASA Earthdata token (urs.earthdata.nasa.gov > Generate Token): enables the 30 m forest-loss watch.
+      - key: EARTHDATA_TOKEN
+        sync: false
+      # Optional: this site's own URL; the server pings itself so the free tier doesn't sleep.
+      - key: KEEP_WARM_URL
+        sync: false
       - key: RATE_LIMIT_PER_MINUTE
         value: "240"

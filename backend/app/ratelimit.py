@@ -14,7 +14,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 # Requests that reach slow upstream services cost more tokens.
-COST = {"/api/series": 6, "/api/extra": 6, "/api/geocode": 3, "/api/events": 3, "/api/street": 2}
+COST = {"/api/series": 6, "/api/extra": 6, "/api/geocode": 3, "/api/events": 3, "/api/street": 2,
+        # Screening: the first look at a new area builds terrain (CPU); the job poll and images are cheap.
+        "/api/screening/backtest": 3, "/api/screening/": 1, "/api/screening": 4}
 
 
 class RateLimit(BaseHTTPMiddleware):

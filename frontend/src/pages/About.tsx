@@ -7,8 +7,23 @@ export default function About() {
       <article className="doc">
         <h1>About EarthOS</h1>
         <p className="lead">
-          EarthOS is an independent project that makes NASA's vegetation record readable: what changed, how unusual it was, whether the
-          data can be trusted, and what other evidence lines up.
+          EarthOS turns open satellite and weather data into a landslide and flash-flood screen that anyone can check, piloted in
+          Santa Ana, Costa Rica. It also makes NASA's vegetation record readable: what changed, how unusual it was, whether the data
+          can be trusted, and what other evidence lines up.
+        </p>
+
+        <h2>The Santa Ana pilot</h2>
+        <p>
+          Santa Ana's neighbourhoods climb into the steep Escazú hills. Heavy rain on saturated slopes has caused deadly landslides
+          nearby, such as the 2010 Pico Blanco slide in San Antonio de Escazú, and stream corridors flood quickly. Official warnings come
+          from the CNE and IMN; what is often missing locally is an open, explainable picture of <i>where</i> slopes and stream banks are
+          more susceptible, <i>whether</i> steep forest has been lost, and <i>when</i> rain approaches levels that have coincided with
+          past slides.
+        </p>
+        <p>
+          EarthOS answers with three layers and one test: susceptibility, a slope forest-loss watch and a rainfall trigger, plus a
+          backtest that scores the trigger against past landslides, misses and false alarms included. Everything runs on free, open
+          data, so it costs little to keep running and can be repeated for any town.
         </p>
 
         <h2>Why</h2>
@@ -28,8 +43,8 @@ export default function About() {
 
         <h2>What it isn't</h2>
         <p>
-          EarthOS is not an early-warning or emergency system, and its explanations aren't proof of cause. Use it to find and understand
-          changes worth a closer look.
+          EarthOS is a screening tool, not an official warning. "Lower susceptibility" never means safe, vegetation loss is always "cause
+          unconfirmed", and explanations aren't proof of cause. For warnings and evacuation orders, follow the national services.
         </p>
 
         <h2>Who</h2>

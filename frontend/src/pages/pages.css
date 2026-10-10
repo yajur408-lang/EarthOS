@@ -69,3 +69,14 @@
   .steps ol { grid-template-columns: 1fr; }
   .page-nav nav { gap: 14px; font-size: 14px; }
 }
+
+/* Santa Ana pilot */
+.hero-figure .relief { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; display: block; background: #d6d3c4; }
+.screen-line { margin: 16px 0 0; font-size: 14px; color: var(--muted); }
+.why h2 { font-size: 26px; margin: 40px 0 16px; }
+.why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.why-grid p { margin: 0; padding: 18px; border-radius: 14px; background: var(--surface-2); line-height: 1.55; font-size: 15px; }
+@media (max-width: 760px) {
+  .why-grid { grid-template-columns: 1fr; }
+}
+.doc h3 { font-size: 17px; margin: 22px 0 6px; }

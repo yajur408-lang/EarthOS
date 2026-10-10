@@ -78,6 +78,12 @@ async def _prewarm():
                 ornl.ndvi_series(p["lat"], p["lon"], p["km"], year - 9, year),
                 power.daily_climate(p["lat"], p["lon"], (dt.date(year - 9, 1, 1) - dt.timedelta(days=analysis.ANTECEDENT_DAYS)).isoformat(), f"{year}-12-31"),
             )
+            if p.get("pilot"):
+                from .screening import service
+                clat, clon, h = service.snap(p["lat"], p["lon"], p["screen_km"])
+                await service.area(clat, clon, h)
+                if service.loss_ready():
+                    service.start_loss(clat, clon, h, service.default_loss_end())
             log.info("prewarmed %s", pid)
         except Exception as e:  # best effort: a slow upstream must never block startup
             log.warning("prewarm %s failed: %s", pid, e)
@@ -375,6 +381,123 @@ async def explain(
     ev["explanation"] = analysis.explain_event(ev, context)
     return {"event": ev, "context": context, "notes": notes,
             "sources": {k: analysis_sources[k] for k in ("MOD13Q1", "POWER", "MCD64A1", "MCD12Q1")}}
+
+
+# ---------- hazard screening (landslides and flash floods) ----------
+
+SCREENING_NOTICE = "Screening tool, not an official warning."
+
+
+def _official_links(country: str | None) -> list[dict]:
+    links = []
+    if country == "Costa Rica":
+        links += [
+            {"name": "CNE - Comisión Nacional de Prevención de Riesgos y Atención de Emergencias", "url": "https://www.cne.go.cr"},
+            {"name": "IMN - Instituto Meteorológico Nacional (avisos)", "url": "https://www.imn.ac.cr/avisos"},
+        ]
+    links += [
+        {"name": "WMO Severe Weather Information Centre (national services worldwide)", "url": "https://severeweather.wmo.int"},
+        {"name": "GDACS - Global Disaster Alert and Coordination System", "url": "https://www.gdacs.org"},
+    ]
+    return links
+
+
+def _screen_area(lat: float, lon: float, half_km: float | None):
+    from .places import PILOT
+    from .screening import service
+    if half_km is None and abs(lat - PILOT["lat"]) < 0.03 and abs(lon - PILOT["lon"]) < 0.03:
+        return service.snap(PILOT["lat"], PILOT["lon"], PILOT["screen_km"])
+    return service.snap(lat, lon, half_km)
+
+
+@app.get("/api/screening")
+async def screening(lat: float = LatQ, lon: float = LonQ, half_km: float | None = Query(None, ge=1, le=8),
+                    country: str | None = None):
+    """Susceptibility summary and the class at the clicked point, the rainfall trigger, and forest-loss status."""
+    from .screening import service, trigger
+    clat, clon, h = _screen_area(lat, lon, half_km)
+    susc, trig = await asyncio.gather(
+        service.susceptibility_result(clat, clon, h, (lat, lon)), trigger.current(lat, lon), return_exceptions=True)
+    end = service.default_loss_end()
+    loss = service.loss_status(clat, clon, h, end)
+    if loss["status"] == "not_started" and service.loss_ready():
+        loss = service.start_loss(clat, clon, h, end)
+    elif not service.loss_ready() and loss["status"] == "not_started":
+        loss = {**loss, "status": "unavailable", "error": "The 30 m forest-loss watch needs a NASA Earthdata token on the server."}
+    q = {"lat": clat, "lon": clon, "half_km": h}
+    return {
+        "area": q,
+        "notice": SCREENING_NOTICE,
+        "official": _official_links(country),
+        "susceptibility": susc if not isinstance(susc, Exception) else {"error": f"{type(susc).__name__}: {susc}"},
+        "overlay": f"/api/screening/susceptibility.png?lat={clat}&lon={clon}&half_km={h}&v={service.PNG_VERSION}",
+        "trigger": trig if not isinstance(trig, Exception) else {"error": str(trig)},
+        "forest_loss": {**loss, "end": end.isoformat(),
+                        "overlay": f"/api/screening/forest-loss.png?lat={clat}&lon={clon}&half_km={h}&end={end.isoformat()}"},
+    }
+
+
+@app.get("/api/screening/forest-loss")
+async def screening_loss(lat: float = LatQ, lon: float = LonQ, half_km: float | None = Query(None, ge=1, le=8),
+                         end: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    """Status (and result when done) of the forest-loss watch; starts the job if needed. Poll until done."""
+    from .screening import service
+    clat, clon, h = _screen_area(lat, lon, half_km)
+    e = dt.date.fromisoformat(end) if end else service.default_loss_end()
+    st = service.loss_status(clat, clon, h, e)
+    if st["status"] == "not_started":
+        st = service.start_loss(clat, clon, h, e)
+    return {**st, "end": e.isoformat(), "notice": SCREENING_NOTICE}
+
+
+@app.get("/api/screening/susceptibility.png")
+async def screening_susc_png(lat: float = LatQ, lon: float = LonQ, half_km: float = Query(..., ge=1, le=8)):
+    from .screening import service
+    clat, clon, h = service.snap(lat, lon, half_km)
+    path = service.DIR / f"susc{service.PNG_VERSION}_{service.area_key(clat, clon, h)}.png"
+    if not path.exists():
+        a = await service.area(clat, clon, h)
+        png = await asyncio.to_thread(service.susceptibility_png, a)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(png)
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/screening/preview.png")
+async def screening_preview_png(lat: float = LatQ, lon: float = LonQ, half_km: float = Query(..., ge=1, le=8)):
+    """Shaded relief + susceptibility, for the landing page and reports."""
+    from .screening import service
+    clat, clon, h = service.snap(lat, lon, half_km)
+    path = service.DIR / f"preview{service.PNG_VERSION}_{service.area_key(clat, clon, h)}.png"
+    if not path.exists():
+        a = await service.area(clat, clon, h)
+        png = await asyncio.to_thread(service.preview_png, a)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(png)
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/screening/forest-loss.png")
+async def screening_loss_png(lat: float = LatQ, lon: float = LonQ, half_km: float = Query(..., ge=1, le=8),
+                             end: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    from .screening import service
+    clat, clon, h = service.snap(lat, lon, half_km)
+    path = service.loss_png_path(clat, clon, h, dt.date.fromisoformat(end))
+    if not path.exists():
+        raise HTTPException(404, "No forest-loss overlay for this area and date yet.")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/screening/trigger")
+async def screening_trigger(lat: float = LatQ, lon: float = LonQ):
+    from .screening import trigger
+    return {**(await trigger.current(lat, lon)), "notice": SCREENING_NOTICE}
+
+
+@app.get("/api/screening/backtest")
+async def screening_backtest(lat: float = LatQ, lon: float = LonQ):
+    from .screening import trigger
+    return {**(await trigger.backtest(round(lat, 3), round(lon, 3))), "notice": SCREENING_NOTICE}
 
 
 analysis_sources = {

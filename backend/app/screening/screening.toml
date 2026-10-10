@@ -1,0 +1,59 @@
+# EarthOS hazard screening: every threshold in one place.
+# These are screening values for discussion and calibration (see /backtest), not official criteria.
+# Change a number here, restart the server, and the layers, the trigger and the backtest all follow.
+
+[area]
+default_half_km = 3.0        # screening box around any clicked place (half-width)
+max_half_km = 8.0
+buffer_km = 1.5              # extra terrain around the box so river routing doesn't stop at the edge
+grid_arcsec = 1.0            # analysis grid spacing (1" ~ 31 m)
+
+[forest_loss]
+min_patch_ha = 0.5           # smallest patch reported (about 6 HLS pixels)
+min_slope_deg = 15.0         # only flag loss on slopes steeper than this
+ndvi_drop = 0.15             # current median NDVI at least this far below the baseline median...
+robust_z = -2.0              # ...and at least 2 robust sigmas below it
+recent_days = 90             # "current" window ending at the chosen date
+baseline_pad_days = 15       # baseline = the same calendar window in prior years, widened by this on each side
+baseline_years = 5           # how many prior years to use (fewer if the record is shorter)
+min_baseline_obs = 3         # clear baseline observations a pixel needs to be judged
+min_recent_obs = 2           # clear recent observations a pixel needs to be judged
+max_scene_cloud_pct = 80     # skip scenes NASA reports as cloudier than this
+# HLS Fmask bits that make a pixel unusable: 1 cloud, 2 adjacent to cloud/shadow, 3 cloud shadow, 4 snow/ice, 5 water
+fmask_reject_bits = [1, 2, 3, 4, 5]
+
+[susceptibility]
+# Landslide part: slope classes (degrees) -> points
+slope_breaks_deg = [15, 25, 35]          # <15: 0, 15-25: 1, 25-35: 2, >=35: 3
+# Land-cover adjustment (ESA WorldCover classes), added to the slope points on slopes >= 15 deg
+landcover_points = { tree = -0.5, shrub = 0.0, grass = 0.5, crop = 0.5, built = 0.5, bare = 1.0, water = 0.0, wetland = 0.0, other = 0.0 }
+# Flood part: height above nearest drainage (m) -> points
+hand_breaks_m = [2, 5, 10]               # <2: 3, 2-5: 2, 5-10: 1, >=10: 0
+stream_area_km2 = 0.25                   # upstream area that defines a drainage line
+# Combined score = max(landslide points, flood points) -> class
+medium_from = 1.5
+high_from = 2.5
+# Uncertainty: a cell is "uncertain" if its class changes when the inputs move by their typical error
+slope_error_deg = 3.0        # 30 m DEM slope error (SRTM, moderate relief)
+hand_error_m = 2.0           # DEM vertical error carried into height above drainage
+landcover_error_points = 0.5 # one land-cover class step
+
+[trigger]
+# Each level fires if ANY of its rules holds; a rule holds if ALL of its minimums are met.
+# fc24 / fc72: forecast rain (mm) in the next 24 / 72 h. ante7: observed rain (mm) in the last 7 days.
+# soil: root-zone soil wetness (0-1, NASA POWER GWETROOT).
+watch = [
+  { fc24 = 50 },
+  { fc72 = 80 },
+  { ante7 = 100, soil = 0.75, fc24 = 25 },
+]
+warning = [
+  { fc24 = 90 },
+  { fc72 = 150 },
+  { ante7 = 150, soil = 0.80, fc24 = 50 },
+]
+
+[backtest]
+radius_km = 25               # events within this distance of the place
+match_days = 1               # an alert within +/- this many days of an event counts as a hit
+start_year = 2001

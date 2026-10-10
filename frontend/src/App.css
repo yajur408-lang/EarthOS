@@ -241,7 +241,7 @@ select, input[type='number'] {
   gap: 18px; padding: 0 14px; font-size: 11.5px; color: #e8eaed; background: rgba(32, 33, 36, 0.72); backdrop-filter: blur(6px);
   font-variant-numeric: tabular-nums;
 }
-.status span:first-child { margin-right: auto; }
+.status > span:first-child { margin-right: auto; }
 
 .split-handle {
   position: absolute; top: 0; bottom: 0; width: 4px; margin-left: -2px; z-index: 5; touch-action: none;
@@ -320,7 +320,7 @@ select, input[type='number'] {
   .ctrl { width: 44px; height: 44px; }
   .ctrl.text, .compass-wrap, .controls > .ctrl:first-child { display: none; }
   .status { height: 28px; }
-  .status span:nth-child(2) { display: none; }
+  .status > span:nth-child(2) { display: none; }
   .compare-labels, .with-card .compare-labels { left: 8px; right: 8px; top: 64px; }
   .globe .cesium-viewer-bottom { right: 8px; bottom: 32px; }
   .sheet-half .sharp, .sheet-full .sharp { display: none; }

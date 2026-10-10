@@ -6,6 +6,7 @@ import Landing from './pages/Landing'
 const Explorer = lazy(() => import('./App.tsx'))
 const Methods = lazy(() => import('./pages/Methods'))
 const About = lazy(() => import('./pages/About'))
+const Backtest = lazy(() => import('./pages/Backtest'))
 
 function Boot() {
   return (
@@ -21,7 +22,7 @@ export default function Root() {
   const route = useRoute()
   return (
     <Suspense fallback={<Boot />}>
-      {route === '/explore' ? <Explorer /> : route === '/methods' ? <Methods /> : route === '/about' ? <About /> : <Landing />}
+      {route === '/explore' ? <Explorer /> : route === '/methods' ? <Methods /> : route === '/about' ? <About /> : route === '/backtest' ? <Backtest /> : <Landing />}
     </Suspense>
   )
 }

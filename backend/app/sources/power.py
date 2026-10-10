@@ -38,6 +38,18 @@ async def daily_climate(lat: float, lon: float, start: str, end: str) -> pd.Data
     latest = (recent - dt.timedelta(days=recent.weekday())).isoformat()
     end = min(end, latest)
 
+    return await _daily(lat, lon, start, end, max_age_days=7)
+
+
+async def recent_daily(lat: float, lon: float, days: int = 21) -> pd.DataFrame:
+    """The last `days` days up to yesterday, refreshed every few hours (for the rainfall trigger).
+    Days POWER hasn't processed yet come back as NaN."""
+    today = dt.date.today()
+    return await _daily(lat, lon, (today - dt.timedelta(days=days)).isoformat(),
+                        (today - dt.timedelta(days=1)).isoformat(), max_age_days=0.25)
+
+
+async def _daily(lat: float, lon: float, start: str, end: str, max_age_days: float) -> pd.DataFrame:
     async def fetch():
         async with http.client() as client:
             r = await client.get(URL, params={
@@ -50,7 +62,7 @@ async def daily_climate(lat: float, lon: float, start: str, end: str) -> pd.Data
             r.raise_for_status()
             return r.json()["properties"]["parameter"]
 
-    p = await cached_json(f"power8_{round(lat, 2)}_{round(lon, 2)}_{start}_{end}", fetch, max_age_days=7)
+    p = await cached_json(f"power8_{round(lat, 2)}_{round(lon, 2)}_{start}_{end}", fetch, max_age_days=max_age_days)
     df = pd.DataFrame({col: p[key] for key, col in PARAMS.items() if key in p})
     df.index = pd.to_datetime(df.index, format="%Y%m%d")
     return df.astype(float).replace(FILL, np.nan)

@@ -1,5 +1,5 @@
 // Single source of truth for the in-app "Data sources & licences" panel.
-// Keep in sync with docs/DATA_SOURCES.md. Last verified 2026-10-09.
+// Keep in sync with docs/DATA_SOURCES.md. Last verified 2026-10-10.
 
 export interface Source {
   name: string
@@ -60,7 +60,7 @@ export const SOURCES: Source[] = [
   },
   {
     name: 'Terrain Tiles (Mapzen / AWS Open Data, Terrarium)',
-    role: '3D terrain on the globe; elevation, slope, aspect and profile for a pin',
+    role: '3D terrain on the globe; elevation, slope, aspect and profile for a pin; slope, drainage lines and HAND for the susceptibility layer',
     status: 'in use',
     licence: 'Mixed open sources: USGS 3DEP/SRTM/GMTED2010 and NOAA ETOPO1 (public domain), EU-DEM (Copernicus), Geoscience Australia (CC BY 4.0), Kartverket (CC BY 4.0), LINZ (CC BY 3.0 NZ), Canada OGL, UK OGL, INEGI, Austria (CC BY 3.0 AT)',
     commercial: 'yes, with attribution',
@@ -141,8 +141,8 @@ export const SOURCES: Source[] = [
   },
   {
     name: 'HLS Vegetation Indices v2.0 - HLSL30_VI (Landsat 8/9) + HLSS30_VI (Sentinel-2)',
-    role: '30 m NDVI time series (planned)',
-    status: 'planned',
+    role: 'Slope forest-loss watch: 30 m NDVI with the HLS Fmask cloud mask (needs EARTHDATA_TOKEN on the server)',
+    status: 'in use',
     licence: 'NASA: openly shared without restriction (EOSDIS Data Use and Citation Guidance). HLSS30_VI also carries Copernicus Sentinel terms (free, attribution required).',
     commercial: 'yes, with attribution',
     attribution:
@@ -185,6 +185,33 @@ export const SOURCES: Source[] = [
     commercial: 'yes, with attribution',
     attribution: '-',
     link: 'https://www.globalforestwatch.org/terms/',
+  },
+  {
+    name: 'ESA WorldCover 10 m 2021 v200',
+    role: 'Land cover for the susceptibility layer',
+    status: 'in use',
+    licence: 'Creative Commons Attribution 4.0 International (CC BY 4.0)',
+    commercial: 'yes, with attribution',
+    attribution: '© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium. Zanaga, D. et al. (2022) doi:10.5281/zenodo.7254221',
+    link: 'https://esa-worldcover.org/en/data-access',
+  },
+  {
+    name: 'NASA Global Landslide Catalog (export, 2007-2017)',
+    role: 'Past landslides for the rainfall-trigger backtest',
+    status: 'in use',
+    licence: 'NASA open data (data.gov listing); cite the catalogue papers',
+    commercial: 'yes, with attribution',
+    attribution: 'Kirschbaum, D. B. et al. (2010) Natural Hazards 52:561-575; Kirschbaum, D. B., Stanley, T., Zhou, Y. (2015) Geomorphology 249:4-15',
+    link: 'https://catalog.data.gov/dataset/global-landslide-catalog-export',
+  },
+  {
+    name: 'Municipalidad de Santa Ana open data: CNE Tapezco landslide report (2018)',
+    role: 'Local landslide report for the Santa Ana backtest',
+    status: 'in use',
+    licence: 'Published on the municipal open-data portal; cited and linked, not redistributed',
+    commercial: 'yes, with attribution',
+    attribution: 'Comisión Nacional de Prevención de Riesgos y Atención de Emergencias (CNE), informe técnico, deslizamiento Tapezco, via datosabiertos.santaana.go.cr',
+    link: 'https://datosabiertos.santaana.go.cr',
   },
 ]
 

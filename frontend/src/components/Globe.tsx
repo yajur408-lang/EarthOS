@@ -19,7 +19,9 @@ import {
   Rectangle,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
+  SingleTileImageryProvider,
   SplitDirection,
+  TextureMagnificationFilter,
   VerticalOrigin,
   Viewer,
   WebMapServiceImageryProvider,
@@ -39,6 +41,8 @@ export interface LayerSpec {
   alpha?: number
   /** Hide the layer until the view is this detailed (avoids loading 30 m tiles for the whole globe). */
   minLevel?: number
+  /** A single georeferenced image (EarthOS screening overlays) instead of a GIBS layer. */
+  image?: { url: string; west: number; south: number; east: number; north: number; credit: string }
 }
 
 export interface Pin {
@@ -129,7 +133,7 @@ function makeProvider(layer: GibsLayer, date?: string): ImageryProvider {
   })
 }
 
-const specKey = (s: LayerSpec) => `${s.layerId}|${s.date ?? ''}|${s.split ?? ''}`
+const specKey = (s: LayerSpec) => `${s.layerId}|${s.date ?? ''}|${s.split ?? ''}|${s.image?.url ?? ''}`
 
 function boxRectangle(p: Pin) {
   const dLat = p.km / 111.32
@@ -457,7 +461,17 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       const key = specKey(s)
       let il = active.get(key)
       if (!il) {
-        il = new ImageryLayer(makeProvider(layerById(s.layerId), s.date), s.minLevel ? { minimumTerrainLevel: s.minLevel } : undefined)
+        if (s.image) {
+          const { url, west, south, east, north, credit } = s.image
+          il = ImageryLayer.fromProviderAsync(SingleTileImageryProvider.fromUrl(url, {
+            rectangle: Rectangle.fromDegrees(west, south, east, north), credit: new Credit(credit),
+          }), {})
+          // Crisp pixels: these are 30 m analysis cells, not photos.
+          il.magnificationFilter = TextureMagnificationFilter.NEAREST
+          il.readyEvent.addEventListener(() => viewer.scene.requestRender())
+        } else {
+          il = new ImageryLayer(makeProvider(layerById(s.layerId), s.date), s.minLevel ? { minimumTerrainLevel: s.minLevel } : undefined)
+        }
         viewer.imageryLayers.add(il)
         active.set(key, il)
       }

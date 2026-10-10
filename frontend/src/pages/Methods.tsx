@@ -6,7 +6,42 @@ export default function Methods() {
     <PageShell>
       <article className="doc">
         <h1>Methods</h1>
-        <p className="lead">How EarthOS turns satellite measurements into flags and explanations, and where it can go wrong.</p>
+        <p className="lead">How EarthOS turns satellite measurements into screening layers, flags and explanations, and where it can go wrong.</p>
+        <p className="note"><b>Screening tool, not an official warning.</b> For warnings and evacuation orders, follow the national services (in Costa Rica: CNE and IMN). All thresholds below live in one file on the server (<code>backend/app/screening/screening.toml</code>).</p>
+
+        <h2>A. Hazard screening (landslides and flash floods)</h2>
+        <h3>A1. Susceptibility</h3>
+        <ul>
+          <li><b>Grid:</b> a square around the place (Santa Ana: 12 × 12 km; elsewhere 6 × 6 km by default) on a 1 arc-second (~31 m) grid, with an extra 1.5 km of terrain around it so drainage routing doesn't stop at the edge.</li>
+          <li><b>Terrain:</b> elevation from Terrain Tiles (Terrarium, mostly SRTM 1 arc-second in Costa Rica), sampled bilinearly. Slope by Horn's method.</li>
+          <li><b>Drainage and HAND:</b> pits filled and flow routed with priority-flood (Barnes et al. 2014); cells draining at least 0.25 km² are drainage lines; HAND is each cell's height above the drainage cell it flows to (Rennó et al. 2008; Nobre et al. 2011).</li>
+          <li><b>Land cover:</b> ESA WorldCover 10 m 2021.</li>
+          <li><b>Points:</b> landslide points from slope (&lt;15°: 0, 15–25°: 1, 25–35°: 2, ≥35°: 3), adjusted on slopes ≥15° by land cover (tree −0.5, grass, crop or built +0.5, bare +1). Flood points from HAND (&lt;2 m: 3, 2–5 m: 2, 5–10 m: 1). The class uses the larger: medium from 1.5, high from 2.5.</li>
+          <li><b>Uncertainty:</b> the class is recomputed with slope ±3°, HAND ±2 m and the land-cover adjustment ±0.5 (typical errors of these inputs). Cells whose class changes are marked uncertain (paler on the map, hatched in the bars).</li>
+          <li><b>Wording:</b> the lowest class is always "lower susceptibility, not safe". The layer ranks places relative to each other; it is not a probability.</li>
+        </ul>
+        <h3>A2. Slope forest-loss watch</h3>
+        <ul>
+          <li><b>Data:</b> NASA HLS Vegetation Indices v2.0 NDVI at 30 m (HLSL30_VI from Landsat 8/9, HLSS30_VI from Sentinel-2), found through NASA's CMR catalogue.</li>
+          <li><b>Cloud mask (QA):</b> the HLS Fmask band. Pixels flagged cloud, adjacent to cloud or shadow, cloud shadow, snow/ice or water are removed; scenes with more than 80% tile cloud are skipped.</li>
+          <li><b>Comparison:</b> per pixel, the median clear NDVI of the last 90 days against the median of the same weeks (±15 days) in up to 5 prior years. A pixel needs at least 2 recent and 3 baseline clear views to be judged.</li>
+          <li><b>Flag:</b> NDVI fell by at least 0.15 and at least 2 robust sigmas (1.4826 × MAD, floor 0.03), on a slope over 15°. Flagged pixels are joined into 8-connected patches; patches under 0.5 ha are dropped.</li>
+          <li><b>Label:</b> every patch reads "Possible vegetation loss, cause unconfirmed", with the date range, cloud mask and number of baseline years. Clearing, a landslide, fire, harvest, drought and missed cloud all lower NDVI.</li>
+        </ul>
+        <h3>A3. Rainfall trigger</h3>
+        <ul>
+          <li><b>Inputs:</b> forecast rain for the next 24 and 72 h (MET Norway), observed rain over the last 7 available days and root-zone soil wetness (NASA POWER; about 50 km cells, a few days behind).</li>
+          <li><b>Rules:</b> Watch if forecast 24 h ≥ 50 mm, or 72 h ≥ 80 mm, or (last 7 days ≥ 100 mm and soil wetness ≥ 0.75 and forecast 24 h ≥ 25 mm). Warning at 90 mm, 150 mm, or (150 mm, 0.80, 50 mm). These are starting values, to be tuned against the backtest.</li>
+          <li>The days between the last observed day and today are counted by neither source; the panel says how many.</li>
+        </ul>
+        <h3>A4. Backtest</h3>
+        <ul>
+          <li>The same rules are replayed for every day since 2001 with observed rain standing in for the forecast (a "perfect-forecast hindcast"), and compared with landslides reported within 25 km: NASA's Global Landslide Catalog (2007–2017 export) and local reports such as the CNE's Tapezco 2018 report.</li>
+          <li><b>Hit rate</b> = rain-triggered landslides with an alert within ±1 day ÷ all of them. <b>False-alarm rate</b> = alert episodes with no landslide reported within ±1 day ÷ all alert episodes.</li>
+          <li>Catalogues only include landslides that made the news, so some "false alarms" are probably unreported slides; real forecasts are less accurate than observed rain, so real hit rates would be lower. <a {...linkProps('/backtest')}>See the backtest</a>.</li>
+        </ul>
+
+        <h2>B. Vegetation anomalies</h2>
 
         <h2>1. Vegetation measurements</h2>
         <p>
@@ -74,6 +109,14 @@ export default function Methods() {
           <li>Friedl, M., Sulla-Menashe, D. (2022). MCD12Q1 v061. doi:10.5067/MODIS/MCD12Q1.061</li>
           <li>NASA LaRC POWER Project, daily weather (MERRA-2 based).</li>
           <li>NASA HLS v2.0 (HLSS30, HLSL30) via NASA GIBS. Contains modified Copernicus Sentinel data.</li>
+          <li>HLS Vegetation Indices v2.0: doi:10.5067/HLS/HLSL30_VI.002, doi:10.5067/HLS/HLSS30_VI.002.</li>
+          <li>Zanaga, D. et al. (2022). ESA WorldCover 10 m 2021 v200. doi:10.5281/zenodo.7254221 (CC BY 4.0).</li>
+          <li>Terrain Tiles on AWS (Mapzen/Tilezen), mostly SRTM (NASA/USGS) in Costa Rica.</li>
+          <li>Barnes, R., Lehman, C., Mulla, D. (2014). Priority-flood. Computers &amp; Geosciences 62:117–127.</li>
+          <li>Rennó, C. D. et al. (2008). HAND. Remote Sensing of Environment 112:3469–3481; Nobre, A. D. et al. (2011). J. Hydrology 404:13–29.</li>
+          <li>Kirschbaum, D. et al. (2010). Natural Hazards 52:561–575; Kirschbaum, Stanley &amp; Zhou (2015). Geomorphology 249:4–15 (Global Landslide Catalog).</li>
+          <li>MET Norway Locationforecast 2.0 (CC BY 4.0).</li>
+          <li>CNE: Informe técnico, deslizamiento Tapezco (2018), via the Municipalidad de Santa Ana open-data portal.</li>
         </ul>
         <p><a {...linkProps('/explore')}>Open the explorer →</a></p>
       </article>

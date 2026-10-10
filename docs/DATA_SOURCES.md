@@ -1,13 +1,13 @@
 # Data sources, licences and commercial-use review
 
-Last verified: **2026-10-09**. Re-check before any paid launch, because terms change.
+Last verified: **2026-10-10**. Re-check before any paid launch, because terms change.
 The in-app panel (`frontend/src/licences.ts`) mirrors this file.
 
 ## Decision checklist
 
 | Item | Decision | Status |
 |---|---|---|
-| HLS vegetation-index product | **HLS VI v2.0**: `HLSL30_VI` (Landsat 8/9, doi:10.5067/HLS/HLSL30_VI.002) + `HLSS30_VI` (Sentinel-2A/B/C, doi:10.5067/HLS/HLSS30_VI.002), 30 m, NDVI band. LP DAAC says the data are shared "without restriction" under EOSDIS Data Use and Citation Guidance. The Sentinel-2 product also carries the Copernicus attribution duty. | Chosen, licence recorded. Integration planned (milestone 2). |
+| HLS vegetation-index product | **HLS VI v2.0**: `HLSL30_VI` (Landsat 8/9, doi:10.5067/HLS/HLSL30_VI.002) + `HLSS30_VI` (Sentinel-2A/B/C, doi:10.5067/HLS/HLSS30_VI.002), 30 m, NDVI band. LP DAAC says the data are shared "without restriction" under EOSDIS Data Use and Citation Guidance. The Sentinel-2 product also carries the Copernicus attribution duty. | In use: slope forest-loss watch (NDVI + HLS Fmask), read from LP DAAC with `EARTHDATA_TOKEN`. |
 | GIBS attribution and service terms | NASA asks clients to show: *"We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)."* The app shows this as a permanent credit on the globe. `Reference_Labels_15m` and `Coastlines_15m` are OSM-derived (their GIBS titles say "OSM"), so they also need **© OpenStreetMap contributors** (ODbL). That credit is attached to those layers. | Done |
 | Independently licensed forest-loss dataset | **Hansen/UMD Global Forest Change v1.13 (2000–2025)**, **CC BY 4.0**. Direct GeoTIFF tiles at `storage.googleapis.com/earthenginepartners-hansen/GFC-2025-v1.13/`. Global coverage as 10°×10° tiles named by their top-left corner (e.g. `20N_090W`). Chosen over the GFW Data API, which adds an API key and platform terms. | Chosen, URL verified. Integration planned. |
 | Private API keys on the backend | Keys are read only by `backend/app/config.py` from `backend/.env` (git-ignored) or host env vars. The browser only calls `/api/*`. `/api/health` reports whether each key is set, never its value. No `VITE_*` variable holds a secret, because Vite inlines those into public JS. The MVP needs no keys at all. | Done |
@@ -28,13 +28,17 @@ The in-app panel (`frontend/src/licences.ts`) mirrors this file.
 | NASA EONET v3 | Natural events | NASA open data | Yes | NASA EONET |
 | USGS earthquake catalogue | Earthquakes | US public domain | Yes | USGS |
 | NASA HLS v2.0 true colour (GIBS `HLS_S30/L30_Nadir_BRDF_Adjusted_Reflectance`) + NASA CMR granule search | Sharp 30 m imagery when zoomed in; CMR cloud-cover metadata picks the clearest recent pass | NASA open data; Sentinel-2 part also Copernicus terms | Yes, with attribution | NASA HLS v2.0 via NASA GIBS; "Contains modified Copernicus Sentinel data [year]" |
-| NASA POWER daily point API | Daily rain (PRECTOTCORR) and Tmax (T2M_MAX) charts and CSV | NASA open data | Yes | "Data obtained from the NASA Langley Research Center (LaRC) POWER Project funded through the NASA Earth Science/Applied Science Program." |
+| NASA POWER daily point API | Daily weather charts and CSV; observed 7-day rain and root-zone soil wetness (GWETROOT) for the rainfall trigger and backtest | NASA open data | Yes | "Data obtained from the NASA Langley Research Center (LaRC) POWER Project funded through the NASA Earth Science/Applied Science Program." |
+| HLS VI v2.0 (`HLSL30_VI`, `HLSS30_VI`) + HLS Fmask, via NASA CMR and LP DAAC | Slope forest-loss watch (30 m NDVI) | NASA: no restriction. Sentinel part: Copernicus terms (free, attribution). | Yes, with attribution | Cite both DOIs; "Contains modified Copernicus Sentinel data [year]". Needs a free Earthdata token (`EARTHDATA_TOKEN`, backend only). |
+| ESA WorldCover 10 m 2021 v200 (COGs on AWS Open Data) | Land cover for the susceptibility layer | CC BY 4.0 | Yes, with attribution | © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium; Zanaga et al. 2022, doi:10.5281/zenodo.7254221 |
+| Terrain Tiles (as above) | Slope, drainage lines and HAND for the susceptibility layer | as above | Yes, with attribution | as above |
+| NASA Global Landslide Catalog export (2007–2017), bundled as `backend/app/screening/glc_events.csv.gz` | Past landslides for the backtest | NASA open data (data.gov listing); export notes refer to GLC terms: cite the papers | Yes, with attribution | Kirschbaum et al. 2010 (*Nat. Hazards* 52:561–575); Kirschbaum, Stanley & Zhou 2015 (*Geomorphology* 249:4–15) |
+| CNE technical report, Tapezco landslide (2018), Municipalidad de Santa Ana open-data portal | One local event in the Santa Ana backtest (date, place, link) | Public report; cited and linked, not redistributed | Yes, as a citation | CNE, via datosabiertos.santaana.go.cr |
 
 ## Planned
 
 | Source | Licence | Notes |
 |---|---|---|
-| HLS VI v2.0 (`HLSL30_VI`, `HLSS30_VI`) | NASA: no restriction. Sentinel part: Copernicus terms (free, attribution). | Needs a free Earthdata login token (`EARTHDATA_TOKEN`, backend only). Credit line: "Contains modified Copernicus Sentinel data [year]". |
 | Hansen GFC v1.13 | CC BY 4.0 | Cite Hansen et al. 2013, *Science* 342:850–853. |
 | NASA FIRMS active fire API | NASA open data | Needs a free `MAP_KEY` (backend only). |
 

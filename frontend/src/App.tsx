@@ -7,6 +7,9 @@ import MapControls from './components/MapControls'
 import PlaceCard, { type CardTab, type ExportKind, type Options, type PlaceInfo, type Sheet } from './components/PlaceCard'
 import SearchBar, { type SearchPick } from './components/SearchBar'
 import Story, { type StoryControls } from './components/Story'
+import HazardsPanel from './components/HazardsPanel'
+import ScreeningFooter from './components/ScreeningFooter'
+import { useScreening } from './useScreening'
 import Icon from './components/Icon'
 import {
   buildReport, downloadReportHtml, exportChartImages, exportCsv, exportGeoJson, exportJson, exportPng, exportSavedPlaces,
@@ -30,6 +33,7 @@ const Licences = lazy(() => import('./components/Licences'))
 import './panels.css'
 import './extras.css'
 import './story.css'
+import './hazards.css'
 
 const THIS_YEAR = new Date().getUTCFullYear()
 type Cursor = { lat: number; lon: number; heightM?: number } | null
@@ -37,8 +41,9 @@ const round5 = (v: number) => +v.toFixed(5)
 
 export default function App() {
   const globe = useRef<GlobeHandle>(null)
-  // A shared link (#lat=..&lon=..) sets the starting view.
+  // A shared link (#lat=..&lon=..) sets the starting view; /explore?pilot=santa-ana opens the hazard pilot.
   const [link] = useState(readShareUrl)
+  const [pilot] = useState(() => !link && new URLSearchParams(location.search).get('pilot') === 'santa-ana')
   const [base, setBase] = useState(link?.base ?? 'bluemarble')
   const [overlays, setOverlays] = useState<string[]>(['labels'])
   const [opacity, setOpacity] = useState(0.85)
@@ -49,10 +54,12 @@ export default function App() {
 
   const [examples, setExamples] = useState<Place[]>([])
   const [place, setPlace] = useState<PlaceInfo | null>(() =>
-    link ? { lat: +link.lat.toFixed(5), lon: +link.lon.toFixed(5), km: link.km, name: null, label: null, country: null } : null)
-  const [sheet, setSheet] = useState<Sheet>('peek')
-  const [tab, setTab] = useState<CardTab>(() =>
-    link?.tab && ['overview', 'charts', 'anomalies', 'street', 'weather', 'news'].includes(link.tab) ? (link.tab as CardTab) : 'overview')
+    link ? { lat: +link.lat.toFixed(5), lon: +link.lon.toFixed(5), km: link.km, name: null, label: null, country: null }
+      : pilot ? { lat: 9.915, lon: -84.19, km: 1, name: 'Santa Ana', label: 'Pilot area: landslides and flash floods · San José, Costa Rica', country: 'Costa Rica' }
+        : null)
+  const [sheet, setSheet] = useState<Sheet>(pilot ? 'half' : 'peek')
+  const [tab, setTab] = useState<CardTab>(() => pilot ? 'hazards' :
+    link?.tab && ['overview', 'hazards', 'charts', 'anomalies', 'street', 'weather', 'news'].includes(link.tab) ? (link.tab as CardTab) : 'overview')
   const [options, setOptions] = useState<Options>({ start: THIS_YEAR - 9, end: THIS_YEAR, z: 2, drop: 0.1 })
   const [result, setResult] = useState<{ key: string; series?: Series; error?: string } | null>(null)
   const [focus, setFocus] = useState<{ key: string; index: number } | null>(null)
@@ -77,7 +84,7 @@ export default function App() {
   const [storyOn, setStoryOn] = useState(() => new URLSearchParams(location.search).get('story') === 'santa-rosa')
   const [invite, setInvite] = useState(() => {
     try {
-      return !storyOn && !location.hash && !localStorage.getItem('earthos.story.seen')
+      return !storyOn && !pilot && !location.hash && !localStorage.getItem('earthos.story.seen')
     } catch {
       return false
     }
@@ -121,6 +128,17 @@ export default function App() {
     }, 250)
     return () => clearInterval(t)
   }, [link])
+
+  // Pilot entry point (/explore?pilot=santa-ana): fly to Santa Ana once the globe exists.
+  useEffect(() => {
+    if (!pilot) return
+    const t = setInterval(() => {
+      if (!globe.current) return
+      clearInterval(t)
+      globe.current.flyToBounds(9.861, 9.969, -84.245, -84.135)
+    }, 250)
+    return () => clearInterval(t)
+  }, [pilot])
 
   useEffect(() => {
     api.places().then(setExamples).catch(() => setNotice('Data server not reachable. Start the backend on port 8000.'))
@@ -168,6 +186,9 @@ export default function App() {
   // Street-level photos near the pin; events/news only once the News tab is opened (GDELT is rate-limited).
   const pointKey = pLat != null && pLon != null ? `${pLat},${pLon}` : null
   const street = useFetch<StreetNearby>(pointKey, (s) => api.street(pLat!, pLon!, s))
+  // Hazard screening: loads with the Hazards tab, or while one of its map layers is on.
+  const [hazardLayers, setHazardLayers] = useState({ susc: pilot, loss: pilot })
+  const screening = useScreening(place, tab === 'hazards' || hazardLayers.susc || hazardLayers.loss)
   const eventsKey = pointKey && extras && tab === 'news' ? pointKey : null
   const events = useFetch<EventsResult>(eventsKey, (s) => api.events({ lat: pLat!, lon: pLon! }, s))
 
@@ -267,12 +288,24 @@ export default function App() {
       out.push({ layerId: compare.layerId, date: compare.a, split: 'left' })
       out.push({ layerId: compare.layerId, date: compare.b, split: 'right' })
     }
+    const scr = screening.data
+    if (scr && hazardLayers.susc && !scr.susceptibility.error) {
+      out.push({ layerId: 'screen-susc', image: { url: api.url(scr.overlay), ...scr.susceptibility.bounds,
+        credit: 'EarthOS susceptibility: Terrain Tiles (SRTM), ESA WorldCover 2021 (CC BY 4.0)' } })
+    }
+    const loss = screening.loss
+    const lossRes = loss?.status === 'done' ? loss : loss?.previous
+    if (lossRes?.has_overlay && lossRes.bounds && hazardLayers.loss && loss?.overlay) {
+      const end = loss.status === 'done' ? loss.end : (loss.previous?.end ?? loss.end)
+      out.push({ layerId: 'screen-loss', image: { url: api.url(loss.overlay.replace(/end=[\d-]+/, `end=${end}`)), ...lossRes.bounds,
+        credit: 'EarthOS forest-loss watch: NASA HLS VI v2.0 (contains modified Copernicus Sentinel data)' } })
+    }
     for (const id of overlays) {
       if (compare.on && id === compare.layerId) continue
       out.push({ layerId: id, date, alpha: layerById(id).credit ? 1 : opacity })
     }
     return out
-  }, [base, date, overlays, opacity, compare, sharpOn, sharp.pass, sharp.fill])
+  }, [base, date, overlays, opacity, compare, sharpOn, sharp.pass, sharp.fill, screening.data, screening.loss, hazardLayers])
 
   // Markers: photo locations on the Street tab, events/earthquakes on the News tab.
   const markers = useMemo<Marker[]>(() => {
@@ -404,6 +437,17 @@ export default function App() {
           onFly={(lat, lon) => globe.current?.flyTo(lat, lon, 120_000, -45)}
           saved={isSaved} onToggleSave={toggleSave} onShare={share} onExport={onExport}
           sheet={sheet} onSheet={setSheet} extras={extras}
+          hazards={(
+            <HazardsPanel data={screening.data} loading={screening.loading} error={screening.error} retry={screening.retry}
+              loss={screening.loss} lat={place.lat} lon={place.lon}
+              showSusc={hazardLayers.susc} onShowSusc={(on) => {
+                setHazardLayers((h) => ({ ...h, susc: on }))
+                const b = screening.data?.susceptibility.bounds
+                if (on && b) globe.current?.flyToBounds(b.south, b.north, b.west, b.east)
+              }}
+              showLoss={hazardLayers.loss} onShowLoss={(on) => setHazardLayers((h) => ({ ...h, loss: on }))}
+              onFly={(lat, lon) => { setHazardLayers((h) => ({ ...h, loss: true })); globe.current?.flyTo(lat, lon, 3500, -50) }} />
+          )}
           onClose={() => setPlace(null)}
         />
       )}
@@ -476,7 +520,8 @@ function StatusBar({ cursor, view, terrain, onLicences }: { cursor: Bus<Cursor>;
         {c && terrain && c.heightM != null ? ` · elevation ${Math.round(c.heightM).toLocaleString()} m` : ''}
       </span>
       <span>Camera {fmtDistance(v.heightM)} · tilt {Math.round(90 + v.pitchDeg)}°</span>
-      <button className="link" onClick={onLicences}>Data sources &amp; licences</button>
+      <ScreeningFooter />
+      <button className="link" onClick={onLicences}><span className="wide-only">Data sources &amp; licences</span><span className="narrow-only">Sources</span></button>
     </footer>
   )
 }

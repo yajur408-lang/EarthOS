@@ -1,8 +1,23 @@
 # EarthOS
 
-**A 3D globe for finding unusual vegetation changes anywhere on Earth, with quality-controlled statistics and the evidence behind each one.**
+**Landslide and flash-flood screening from open satellite data: piloted in Santa Ana, Costa Rica, and usable anywhere on Earth. Plus a 3D globe for unusual vegetation changes, with quality-controlled statistics and the evidence behind each one.**
 
-Pages: `/` (landing, with the Santa Rosa 2026 example), `/explore` (the globe), `/methods` (how every number is computed) and `/about`.
+> Screening tool, not an official warning. For alerts, follow the national services (in Costa Rica: CNE and IMN).
+
+Pages: `/` (landing, Santa Ana pilot), `/explore` (the globe; `/explore?pilot=santa-ana` opens the pilot), `/backtest`
+(rainfall trigger vs past landslides), `/methods` (how every number is computed) and `/about`.
+
+### Hazard screening (Hazards tab, any place)
+- **Susceptibility:** slope, height above nearest drainage (HAND, derived from the DEM by priority-flood routing) and
+  ESA WorldCover land cover give each ~31 m cell a lower / medium / high class. Cells whose class changes within typical
+  input error (slope ±3°, HAND ±2 m, one land-cover step) are marked uncertain. "Lower susceptibility, not safe."
+- **Slope forest-loss watch:** 30 m HLS VI NDVI with the Fmask cloud mask; patches ≥ 0.5 ha on slopes > 15° whose recent
+  NDVI is far below the same season in prior years. Labelled "Possible vegetation loss, cause unconfirmed", with date
+  range, QA and number of baseline years. Needs `EARTHDATA_TOKEN`; runs as a background job and is cached.
+- **Rainfall trigger:** forecast 24/72 h rain (MET Norway), observed 7-day rain and root-zone soil wetness (NASA POWER)
+  → Watch / Warning. All thresholds are in `backend/app/screening/screening.toml`.
+- **Backtest:** the rules replayed over daily rain since 2001 and scored against NASA's Global Landslide Catalog and
+  local reports (hit rate, false-alarm rate).
 
 The interface works like Google Maps and Google Earth:
 - **Search** (press `/`) for a place name or coordinates such as `-3.1, -60.0` or `9.9N 84.1W`.

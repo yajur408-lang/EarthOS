@@ -12,6 +12,7 @@ import datetime as dt
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parent.parent
@@ -25,7 +26,7 @@ sys.path.insert(0, str(BACKEND))
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
-from app.places import FEATURED  # noqa: E402
+from app.places import FEATURED, PILOT  # noqa: E402
 
 
 def main():
@@ -48,6 +49,20 @@ def main():
             for ev in (s.get("stats") or {}).get("events", [])[:4]:
                 print(f"  explain {ev['start']}", flush=True)
                 c.get("/api/explain", params={**rng, "event_start": ev["start"], "direction": ev["direction"]})
+        # Hazard-screening pilot: layers, overlay images, backtest, and (with a token) the forest-loss watch.
+        print("pilot: screening", flush=True)
+        scr = c.get("/api/screening", params={"lat": PILOT["lat"], "lon": PILOT["lon"], "country": PILOT["country"]}).json()
+        a = scr["area"]
+        for path in ("susceptibility.png", "preview.png"):
+            c.get(f"/api/screening/{path}", params=a)
+        c.get("/api/screening/backtest", params={"lat": PILOT["lat"], "lon": PILOT["lon"]})
+        loss = scr["forest_loss"]
+        t0 = time.time()
+        while loss.get("status") == "running" and time.time() - t0 < 3600:
+            time.sleep(15)
+            loss = c.get("/api/screening/forest-loss", params={**a, "end": scr["forest_loss"]["end"]}).json()
+            print(f"  forest loss: {loss.get('status')} {loss.get('progress', '')}", flush=True)
+        print(f"  forest loss: {loss.get('status')} {loss.get('error', '')}", flush=True)
     # Keep only long-lived data (MODIS, terrain, imagery lookups); short-lived caches refresh on the server.
     if SEED.exists():
         shutil.rmtree(SEED)

@@ -1,17 +1,15 @@
+import { api } from '../api'
 import { linkProps } from '../router'
 import PageShell from './PageShell'
 
-const gibsNdvi = (date: string) =>
-  'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
-  '&LAYERS=MODIS_Terra_L3_NDVI_16Day&STYLES=&FORMAT=image/png&TRANSPARENT=FALSE&SRS=EPSG:4326' +
-  `&BBOX=-86.0,10.25,-85.0,11.25&WIDTH=512&HEIGHT=512&TIME=${date}`
+const PREVIEW = api.url('/api/screening/preview.png?lat=9.915&lon=-84.19&half_km=6')
 
 const FEATURED = [
-  { id: 'guanacaste', name: 'Santa Rosa, Guanacaste', lat: 10.84, lon: -85.62, text: 'Tropical dry forest. In 2026 the rainy-season green-up came weeks late.' },
-  { id: 'tempisque', name: 'Tempisque basin', lat: 10.35, lon: -85.35, text: 'Sugarcane and rice - harvests make greenness drop sharply each year.' },
-  { id: 'san-carlos', name: 'San Carlos plains', lat: 10.55, lon: -84.3, text: 'Pineapple and pasture frontier in the northern lowlands.' },
-  { id: 'osa', name: 'Corcovado, Osa Peninsula', lat: 8.54, lon: -83.59, text: 'Rainforest under near-constant cloud - a hard test for satellites.' },
-  { id: 'chirripo', name: 'Chirripó highlands', lat: 9.48, lon: -83.49, text: 'Montane forest and páramo up to 3,800 m.' },
+  { id: 'santa-ana', name: 'Santa Ana (pilot)', href: '/explore?pilot=santa-ana', text: 'Landslide and flash-flood screening for the Escazú-Santa Ana hills.' },
+  { id: 'guanacaste', name: 'Santa Rosa, Guanacaste', href: '/explore?story=santa-rosa', text: 'Vegetation anomalies: in 2026 the rainy-season green-up came weeks late.' },
+  { id: 'tempisque', name: 'Tempisque basin', href: '/explore#lat=10.35&lon=-85.35&km=1', text: 'Sugarcane and rice - harvests make greenness drop sharply each year.' },
+  { id: 'osa', name: 'Corcovado, Osa Peninsula', href: '/explore#lat=8.54&lon=-83.59&km=1', text: 'Rainforest under near-constant cloud - a hard test for satellites.' },
+  { id: 'chirripo', name: 'Chirripó highlands', href: '/explore#lat=9.48&lon=-83.49&km=1', text: 'Montane forest and páramo up to 3,800 m.' },
 ]
 
 export default function Landing() {
@@ -19,46 +17,53 @@ export default function Landing() {
     <PageShell>
       <section className="hero">
         <div className="hero-text">
-          <p className="eyebrow">Open NASA satellite data · Costa Rica showcase</p>
-          <h1>See how vegetation changes, and check why.</h1>
+          <p className="eyebrow">Pilot: Santa Ana, Costa Rica · works anywhere on Earth</p>
+          <h1>Landslide and flash-flood screening from open satellite data.</h1>
           <p className="lead">
-            EarthOS compares every 16-day satellite measurement of greenness with what's normal for that place and season,
-            flags the unusual ones only when the data are clean, and lays out the rain, heat, fire and land-cover evidence
-            for each.
+            EarthOS maps which slopes and stream corridors are more susceptible, watches steep forest for possible loss, and
+            checks rainfall against thresholds tested on past landslides. Every layer names its data and method.
           </p>
           <div className="cta">
-            <a className="btn-lg primary" {...linkProps('/explore?story=santa-rosa')}>Follow the Santa Rosa story</a>
-            <a className="btn-lg" {...linkProps('/explore')}>Open the globe</a>
+            <a className="btn-lg primary" {...linkProps('/explore?pilot=santa-ana')}>Open the Santa Ana pilot</a>
+            <a className="btn-lg" {...linkProps('/backtest')}>See the backtest</a>
           </div>
+          <p className="screen-line"><b>Screening tool, not an official warning.</b> For alerts, follow the <a href="https://www.cne.go.cr" target="_blank" rel="noopener noreferrer">CNE</a> and <a href="https://www.imn.ac.cr/avisos" target="_blank" rel="noopener noreferrer">IMN</a>.</p>
         </div>
         <figure className="hero-figure">
-          <div className="pair">
-            <div><img src={gibsNdvi('2025-05-25')} alt="Vegetation greenness over Guanacaste, late May 2025" loading="eager" /><span>Late May 2025</span></div>
-            <div><img src={gibsNdvi('2026-05-25')} alt="Vegetation greenness over Guanacaste, late May 2026 - visibly paler" loading="eager" /><span>Late May 2026</span></div>
-          </div>
+          <img className="relief" src={PREVIEW} alt="Shaded relief of Santa Ana with susceptibility classes: red high, orange medium, faint yellow lower; blue drainage lines" loading="eager" />
           <figcaption>
-            Guanacaste, Costa Rica, at the same time of year. In 2026 greenness at Santa Rosa was 0.62 against a normal of 0.86, after
-            rainfall 43% below normal in the preceding month. Imagery: NASA GIBS, MODIS 16-day NDVI.
+            Santa Ana, 12 × 12 km. Red: high, orange: medium, faint yellow: lower susceptibility (not safe), from slope, height above the
+            nearest drainage line and land cover. Paler = could change class within typical data error. Blue: drainage lines.
+            Data: SRTM terrain (Terrain Tiles), ESA WorldCover 2021.
           </figcaption>
         </figure>
       </section>
 
       <section className="steps">
-        <h2>How it works</h2>
+        <h2>Three layers, one test</h2>
         <ol>
-          <li><b>Measure.</b> NASA's MODIS satellites record vegetation greenness (NDVI) every 16 days at 250 m, back to 2000.</li>
-          <li><b>Compare with normal.</b> Each measurement is compared with the same weeks in every other year, so ordinary dry seasons aren't mistaken for damage.</li>
-          <li><b>Check the data.</b> Cloudy or low-quality measurements are shown but never flagged. Each flag lists the quality checks it passed.</li>
-          <li><b>Weigh the evidence.</b> Rainfall, temperature, burned area and land cover are checked against each flag, saying what the data are consistent with, and what they rule out.</li>
+          <li><b>Susceptibility.</b> Slope, height above the nearest stream and land cover give each 30 m cell a lower, medium or high class, with the cells whose class is uncertain marked.</li>
+          <li><b>Slope forest-loss watch.</b> NASA HLS 30 m NDVI flags patches of 0.5 ha or more on slopes over 15° that are much less green than the same season in past years. Cause unconfirmed.</li>
+          <li><b>Rainfall trigger.</b> Forecast rain, the last 7 days of rain and soil wetness give a Watch or Warning. Thresholds sit in one config file.</li>
+          <li><b>Backtest.</b> The same rules are replayed over 20+ years of daily rain and scored against reported landslides: hit rate and false-alarm rate, shown openly.</li>
         </ol>
       </section>
 
+      <section className="why">
+        <h2>Why Santa Ana</h2>
+        <div className="why-grid">
+          <p>Santa Ana sits below the steep Escazú hills, where heavy rain on saturated soil has triggered deadly slides. NASA's Global Landslide Catalog lists the November 2010 Pico Blanco slide in neighbouring San Antonio de Escazú (23 deaths) and a slide on Calle Montoya in Salitral the month before.</p>
+          <p>In September 2018 the national emergency commission (CNE) inspected a landslide in the upper Quebrada Pittier at Tapezco, Salitral. Its report is on the municipality's open-data portal.</p>
+          <p>Official warnings come from the CNE and IMN. EarthOS adds a free, open screen that a school, a neighbourhood committee or a municipality can check and question, with every number traceable.</p>
+        </div>
+      </section>
+
       <section className="places">
-        <h2>Start with Costa Rica</h2>
-        <p className="muted">These places are pre-loaded, so they open instantly. Anywhere else on Earth works too - the first visit takes a minute or two while NASA's servers respond.</p>
+        <h2>Explore</h2>
+        <p className="muted">These places are pre-loaded, so they open instantly. Anywhere else on Earth works too: click the globe and open the Hazards tab.</p>
         <div className="place-grid">
           {FEATURED.map((p) => (
-            <a key={p.id} className="place" {...linkProps(`/explore#lat=${p.lat}&lon=${p.lon}&km=1`)}>
+            <a key={p.id} className="place" {...linkProps(p.href)}>
               <b>{p.name}</b>
               <span>{p.text}</span>
             </a>
@@ -69,15 +74,15 @@ export default function Landing() {
       <section className="trust">
         <div>
           <h3>Open data, cited</h3>
-          <p>NASA MODIS, Landsat/Sentinel-2 (HLS) and POWER weather data. Every chart and claim names its source; downloads keep the credits.</p>
+          <p>NASA HLS, MODIS and POWER, MET Norway forecasts, ESA WorldCover and SRTM terrain. Every layer names its source, method and limits.</p>
         </div>
         <div>
-          <h3>Quality first</h3>
-          <p>MODIS pixel-quality flags decide which measurements count. A cloudy composite can't raise an alarm.</p>
+          <h3>Tested in the open</h3>
+          <p>The rainfall thresholds are scored against past landslides, including the misses and false alarms. <a {...linkProps('/backtest')}>See the backtest</a>.</p>
         </div>
         <div>
-          <h3>Evidence, not verdicts</h3>
-          <p>Explanations say what the data are consistent with and list what's missing. They don't claim cause. <a {...linkProps('/methods')}>Read the methods</a>.</p>
+          <h3>No verdicts</h3>
+          <p>"Lower susceptibility" never means safe, and vegetation loss is always "cause unconfirmed". <a {...linkProps('/methods')}>Read the methods</a>.</p>
         </div>
       </section>
     </PageShell>

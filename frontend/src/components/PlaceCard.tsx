@@ -23,10 +23,11 @@ export interface Options {
   drop: number
 }
 
-export type CardTab = 'overview' | 'charts' | 'anomalies' | 'street' | 'weather' | 'news'
+export type CardTab = 'overview' | 'hazards' | 'charts' | 'anomalies' | 'street' | 'weather' | 'news'
 
 const TABS: { id: CardTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'hazards', label: 'Hazards' },
   { id: 'charts', label: 'Charts' },
   { id: 'anomalies', label: 'Anomalies' },
   { id: 'street', label: 'Street' },
@@ -73,6 +74,8 @@ interface Props {
   /** Phone layout: how far the bottom sheet is pulled up. */
   sheet: Sheet
   onSheet: (s: Sheet) => void
+  /** Content of the Hazards tab (built by the app, which also owns the map overlays). */
+  hazards: React.ReactNode
 }
 
 export type Sheet = 'peek' | 'half' | 'full'
@@ -219,6 +222,8 @@ export default function PlaceCard(props: Props) {
         {needsSeries && series?.ndvi.error && <div className="alert soft">NDVI: {series.ndvi.error}</div>}
         {needsSeries && series?.climate.error && <div className="alert soft">Climate: {series.climate.error}</div>}
         {needsSeries && !loading && stats?.warnings.map((w) => <div key={w} className="alert soft">{w}</div>)}
+
+        {tab === 'hazards' && props.hazards}
 
         {tab === 'overview' && (
           <>

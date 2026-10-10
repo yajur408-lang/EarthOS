@@ -245,6 +245,103 @@ async function get<T>(path: string, params?: Record<string, string | number | un
   return r.json()
 }
 
+// ---------- hazard screening ----------
+export interface SourceRef { name: string; use?: string; licence?: string; citation?: string; url?: string }
+export interface OfficialLink { name: string; url: string }
+export type SuscClass = 'lower' | 'medium' | 'high'
+export interface Susceptibility {
+  bounds: { west: number; east: number; south: number; north: number }
+  cell_m: number
+  summary: {
+    classes: Record<SuscClass, { share: number; uncertain_share: number }>
+    uncertain_share: number
+    slope_driven_share_of_high: number
+  }
+  at_point: {
+    class: SuscClass; uncertain: boolean; range: [SuscClass, SuscClass]
+    landslide_points: number; flood_points: number; slope_deg: number; hand_m: number | null; land_cover: string
+  } | null
+  terrain: { elevation_m: [number, number]; steep_share: number; drainage_share: number }
+  land_cover: Record<string, number>
+  method: string
+  wording: string
+  sources: SourceRef[]
+  limits: string[]
+  error?: string
+}
+export type TriggerLevel = 'none' | 'watch' | 'warning'
+export interface TriggerInputs { fc24: number | null; fc72: number | null; ante7: number | null; soil: number | null }
+export type TriggerRule = Partial<Record<keyof TriggerInputs, number>>
+export interface Trigger {
+  level: TriggerLevel
+  fired: TriggerRule[]
+  inputs: TriggerInputs
+  windows: { forecast_from: string | null; observed_from: string | null; observed_to: string | null; unobserved_days_before_forecast: number | null }
+  rules: { watch: TriggerRule[]; warning: TriggerRule[] }
+  errors: string[]
+  sources: SourceRef[]
+  notes: string[]
+  error?: string
+}
+export interface LossPatch {
+  id: number; label: string; lat: number; lon: number; area_ha: number; pixels: number; mean_slope_deg: number
+  ndvi_baseline: number; ndvi_recent: number; ndvi_change: number; robust_z: number
+}
+export interface LossResult {
+  label: string
+  patches: LossPatch[]
+  note?: string
+  judged_share?: number
+  judged_steep_share?: number
+  recent_window: [string, string]
+  baseline_windows: [number, string, string][]
+  baseline_years_used: number[]
+  n_baseline_years: number
+  scenes: { recent: number; baseline: number; skipped?: number }
+  qa: string
+  thresholds?: Record<string, number>
+  source: SourceRef
+  bounds?: Susceptibility['bounds']
+  has_overlay?: boolean
+  computed?: string
+}
+export type LossStatus = (
+  | ({ status: 'done' } & LossResult)
+  | { status: 'running'; progress: number; started: number }
+  | { status: 'not_started' | 'unavailable' | 'error'; error?: string }
+) & { end?: string; overlay?: string; previous?: LossResult & { end: string } }
+export interface Screening {
+  area: { lat: number; lon: number; half_km: number }
+  notice: string
+  official: OfficialLink[]
+  susceptibility: Susceptibility
+  overlay: string
+  trigger: Trigger
+  forest_loss: LossStatus
+}
+export interface BacktestEvent {
+  date: string; lat: number; lon: number; trigger: string; accuracy: string; fatalities: string; title: string
+  country: string; source: string; distance_km: number; origin: string; rain_triggered: boolean
+  rain_mm?: number | null; ante7_mm?: number | null; soil?: number | null; level_on_day?: TriggerLevel
+  hit?: Partial<Record<TriggerLevel, boolean>>
+}
+export interface BacktestScore {
+  level: TriggerLevel; events: number; hits: number; hit_rate: number | null
+  alert_episodes: number; false_alarms: number; false_alarm_rate: number | null; alert_days_per_year: number
+}
+export interface Backtest {
+  place: { lat: number; lon: number; radius_km: number }
+  period: [string, string]
+  match_days: number
+  scores: BacktestScore[]
+  events: BacktestEvent[]
+  rules: { watch: TriggerRule[]; warning: TriggerRule[] }
+  method: string
+  caveats: string[]
+  sources: SourceRef[]
+  notice: string
+}
+
 export const api = {
   places: () => get<Place[]>('/api/places'),
   series: (p: { lat: number; lon: number; km: number; start_year: number; end_year: number; z: number; drop: number }, signal?: AbortSignal) =>
@@ -265,4 +362,10 @@ export const api = {
     get<ExplainResult>('/api/explain', p, signal),
   weather: (lat: number, lon: number, signal?: AbortSignal) => get<Forecast>('/api/weather', { lat, lon }, signal),
   events: (p: { lat: number; lon: number }, signal?: AbortSignal) => get<EventsResult>('/api/events', p, signal),
+  screening: (p: { lat: number; lon: number; country?: string }, signal?: AbortSignal) =>
+    get<Screening>('/api/screening', p.country ? p : { lat: p.lat, lon: p.lon }, signal),
+  forestLoss: (p: { lat: number; lon: number; half_km: number; end?: string }, signal?: AbortSignal) =>
+    get<LossStatus>('/api/screening/forest-loss', p.end ? p : { lat: p.lat, lon: p.lon, half_km: p.half_km }, signal),
+  backtest: (lat: number, lon: number, signal?: AbortSignal) => get<Backtest>('/api/screening/backtest', { lat, lon }, signal),
+  url: (path: string) => `${BASE}${path}`,
 }

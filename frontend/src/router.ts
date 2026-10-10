@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 
 // Tiny client-side router: four pages don't need a library. The server returns index.html for every path.
-export type Route = '/' | '/explore' | '/methods' | '/about'
+export type Route = '/' | '/explore' | '/methods' | '/about' | '/backtest'
 
-const ROUTES: Route[] = ['/', '/explore', '/methods', '/about']
+const ROUTES: Route[] = ['/', '/explore', '/methods', '/about', '/backtest']
 
 function current(): Route {
   const p = location.pathname.replace(/\/+$/, '') || '/'

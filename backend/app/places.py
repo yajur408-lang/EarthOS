@@ -1,10 +1,15 @@
 """Example places. `km` is the half-width of the box averaged for NDVI.
 
 Featured (Costa Rica) places ship with a pre-computed data snapshot (backend/seed), so they open
-instantly even right after the server starts. Other places are fetched from NASA on first visit.
+instantly even right after the server starts. The pilot (Santa Ana) also ships its
+hazard-screening layers. Other places are fetched from NASA on first visit.
 """
 
 PLACES = [
+    # ---- Pilot: hazard screening (landslides and flash floods), pre-computed ----
+    {"id": "santa-ana", "name": "Santa Ana", "country": "Costa Rica", "lat": 9.915, "lon": -84.19, "km": 1,
+     "featured": True, "pilot": True, "screen_km": 6.0,
+     "about": "Steep Escazú-Santa Ana hills above a fast-growing town; rain-triggered landslides and flash floods."},
     # ---- Featured: Costa Rica showcase (pre-computed) ----
     {"id": "guanacaste", "name": "Santa Rosa, Guanacaste", "country": "Costa Rica", "lat": 10.84, "lon": -85.62, "km": 1,
      "featured": True, "about": "Tropical dry forest with a sharp dry season - the 2026 rains came late here."},
@@ -28,3 +33,4 @@ PLACES = [
 ]
 
 FEATURED = [p for p in PLACES if p.get("featured")]
+PILOT = next(p for p in PLACES if p.get("pilot"))

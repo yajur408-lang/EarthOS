@@ -1,0 +1,238 @@
+import type { LossResult, LossStatus, Screening, SourceRef, SuscClass, Trigger, TriggerRule } from '../api'
+import { linkProps } from '../router'
+import { prettyDate } from '../util'
+
+interface Props {
+  data: Screening | null
+  loading: boolean
+  error: string | null
+  retry: () => void
+  loss: LossStatus | null
+  showSusc: boolean
+  onShowSusc: (on: boolean) => void
+  showLoss: boolean
+  onShowLoss: (on: boolean) => void
+  onFly: (lat: number, lon: number) => void
+  lat: number
+  lon: number
+}
+
+const CLASS_LABEL: Record<SuscClass, string> = {
+  lower: 'Lower susceptibility, not safe',
+  medium: 'Medium susceptibility',
+  high: 'High susceptibility',
+}
+const LEVEL_TEXT = {
+  none: { title: 'No rainfall trigger', detail: 'None of the Watch rules are met right now.' },
+  watch: { title: 'Watch', detail: 'Rain amounts meet the Watch rules below.' },
+  warning: { title: 'Warning', detail: 'Rain amounts meet the Warning rules below.' },
+}
+const INPUT_LABEL: Record<keyof Trigger['inputs'], string> = {
+  fc24: 'forecast next 24 h',
+  fc72: 'forecast next 72 h',
+  ante7: 'observed last 7 days',
+  soil: 'root-zone soil wetness',
+}
+const unit = (k: string, v: number) => (k === 'soil' ? v.toFixed(2) : `${v} mm`)
+const pct = (v: number) => `${Math.round(v * 100)}%`
+
+export default function HazardsPanel(p: Props) {
+  if (p.loading) {
+    return (
+      <div className="loading">
+        <span className="spinner" aria-hidden />
+        <div>
+          <strong>Building the screening layers…</strong>
+          <span>Terrain, drainage and land cover for this area (a few seconds the first time, instant after that).</span>
+        </div>
+      </div>
+    )
+  }
+  if (p.error || !p.data) {
+    return <div className="alert">Screening unavailable: {p.error ?? 'no data'} <button className="link" onClick={p.retry}>Retry</button></div>
+  }
+  const d = p.data
+  return (
+    <div className="hazards">
+      <Notice d={d} />
+      <TriggerSection t={d.trigger} lat={p.lat} lon={p.lon} />
+      <SusceptibilitySection d={d} show={p.showSusc} onShow={p.onShowSusc} />
+      <LossSection loss={p.loss} show={p.showLoss} onShow={p.onShowLoss} onFly={p.onFly} />
+    </div>
+  )
+}
+
+function Notice({ d }: { d: Screening }) {
+  return (
+    <details className="screen-notice" role="note">
+      <summary><strong>{d.notice}</strong> <span>Official alerts ▾</span></summary>
+      <span>For warnings and evacuation orders, always follow:</span>
+      <ul>
+        {d.official.map((o) => <li key={o.url}><a href={o.url} target="_blank" rel="noopener noreferrer">{o.name}</a></li>)}
+      </ul>
+    </details>
+  )
+}
+
+function ruleText(r: TriggerRule) {
+  return (Object.entries(r) as [keyof Trigger['inputs'], number][]).map(([k, v]) => `${INPUT_LABEL[k]} ≥ ${unit(k, v)}`).join(' and ')
+}
+
+function TriggerSection({ t, lat, lon }: { t: Trigger; lat: number; lon: number }) {
+  if (t.error) return <section className="hz"><h3>Rainfall trigger</h3><div className="alert soft">{t.error}</div></section>
+  const fired = new Set(t.fired.map((r) => JSON.stringify(r)))
+  const lv = LEVEL_TEXT[t.level]
+  return (
+    <section className="hz">
+      <h3>Rainfall trigger <small>landslides and flash floods</small></h3>
+      <div className={`trigger-badge ${t.level}`}>
+        <b>{lv.title}</b>
+        <span>{lv.detail}</span>
+      </div>
+      <dl className="facts">
+        {(Object.keys(INPUT_LABEL) as (keyof Trigger['inputs'])[]).map((k) => (
+          <div key={k}>
+            <dt>{INPUT_LABEL[k][0].toUpperCase() + INPUT_LABEL[k].slice(1)}</dt>
+            <dd>{t.inputs[k] == null ? 'unavailable' : unit(k, t.inputs[k]!)}
+              {k === 'ante7' && t.windows.observed_from ? <small> ({prettyDate(t.windows.observed_from)} – {prettyDate(t.windows.observed_to!)})</small> : null}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {(['watch', 'warning'] as const).map((lvl) => (
+        <div key={lvl} className="rules">
+          <h4>{lvl === 'watch' ? 'Watch' : 'Warning'} if any of:</h4>
+          <ul>
+            {t.rules[lvl].map((r) => {
+              const on = t.level === lvl && fired.has(JSON.stringify(r))
+              return <li key={JSON.stringify(r)} className={on ? 'on' : ''}><span aria-hidden>{on ? '●' : '○'}</span>{ruleText(r)}</li>
+            })}
+          </ul>
+        </div>
+      ))}
+      {t.notes.map((n) => <p key={n} className="hint">{n}</p>)}
+      {t.errors.map((e) => <p key={e} className="hint">{e}</p>)}
+      <a className="link-row" {...linkProps(`/backtest?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}`)}>
+        How did these thresholds do on past landslides here? Open the backtest →
+      </a>
+      <Sources list={t.sources} method="Thresholds are set in the server's screening.toml and checked on the Backtest page." />
+    </section>
+  )
+}
+
+function SusceptibilitySection({ d, show, onShow }: { d: Screening; show: boolean; onShow: (on: boolean) => void }) {
+  const s = d.susceptibility
+  if (s.error) return <section className="hz"><h3>Susceptibility</h3><div className="alert soft">{s.error}</div></section>
+  const at = s.at_point
+  return (
+    <section className="hz">
+      <h3>Susceptibility <small>{(d.area.half_km * 2).toFixed(0)} × {(d.area.half_km * 2).toFixed(0)} km around here, {Math.round(s.cell_m)} m cells</small></h3>
+      {at && (
+        <div className={`susc-point ${at.class}`}>
+          <b>At the pin: {CLASS_LABEL[at.class]}</b>
+          {at.uncertain && (
+            <span>Uncertain: within typical data error this could be {at.range[0] === at.range[1] ? at.range[0] : `${at.range[0]} to ${at.range[1]}`}.</span>
+          )}
+          <span>Slope {at.slope_deg}° · {at.hand_m == null ? 'drains out of the area before a drainage line' : `${at.hand_m} m above the nearest drainage line`} · {at.land_cover}</span>
+        </div>
+      )}
+      <div className="susc-bars" aria-label="Share of the area in each class">
+        {(['high', 'medium', 'lower'] as SuscClass[]).map((c) => {
+          const x = s.summary.classes[c]
+          return (
+            <div key={c} className="susc-row">
+              <span>{c === 'lower' ? 'Lower (not safe)' : c[0].toUpperCase() + c.slice(1)}</span>
+              <div className="bar"><i className={c} style={{ width: pct(x.share) }}><em style={{ width: x.share ? `${(x.uncertain_share / x.share) * 100}%` : 0 }} /></i></div>
+              <b>{pct(x.share)}</b>
+            </div>
+          )
+        })}
+        <p className="hint">Hatched part of each bar: cells whose class could change within typical data error ({pct(s.summary.uncertain_share)} of the area).</p>
+      </div>
+      <label className="toggle">
+        <input type="checkbox" checked={show} onChange={(e) => onShow(e.target.checked)} />
+        <span>Show on the map <small>faint yellow lower · orange medium · red high · paler = uncertain · blue = drainage lines</small></span>
+      </label>
+      <Sources list={s.sources} method={s.method} limits={s.limits} />
+    </section>
+  )
+}
+
+function LossSection({ loss, show, onShow, onFly }: { loss: LossStatus | null; show: boolean; onShow: (on: boolean) => void; onFly: (lat: number, lon: number) => void }) {
+  const head = <h3>Slope forest-loss watch <small>30 m NASA HLS, slopes over 15°</small></h3>
+  if (!loss) return <section className="hz">{head}</section>
+  const result: (LossResult & { end?: string }) | null = loss.status === 'done' ? loss : loss.previous ?? null
+  return (
+    <section className="hz">
+      {head}
+      {loss.status === 'running' && (
+        <div className="loss-progress">
+          <span>Reading NASA HLS scenes for this area… {Math.round(loss.progress * 100)}%</span>
+          <div className="bar"><i style={{ width: `${Math.max(3, loss.progress * 100)}%` }} /></div>
+          <small>A first run reads a few hundred satellite scenes and can take several minutes; the result is then kept.</small>
+        </div>
+      )}
+      {(loss.status === 'unavailable' || loss.status === 'error') && <div className="alert soft">{loss.error}</div>}
+      {result && (
+        <>
+          {loss.status !== 'done' && <p className="hint">Showing the last finished run (to {prettyDate(result.recent_window[1])}).</p>}
+          <p className="loss-meta">
+            Recent clear views {prettyDate(result.recent_window[0])} – {prettyDate(result.recent_window[1])} compared with the same
+            weeks in <b>{result.n_baseline_years} baseline year{result.n_baseline_years === 1 ? '' : 's'}</b>
+            {result.baseline_years_used.length ? ` (${result.baseline_years_used.join(', ')})` : ''}.
+            {' '}{result.scenes.recent} recent and {result.scenes.baseline} baseline scenes used.
+          </p>
+          <p className="hint">Cloud mask: {result.qa}</p>
+          {result.judged_steep_share != null && (
+            <p className="hint">{pct(result.judged_steep_share)} of the steep ground had enough clear views to be judged; the rest is not assessed.</p>
+          )}
+          {result.note && <div className="alert soft">{result.note}</div>}
+          {result.patches.length === 0 ? (
+            <p>No patches met the thresholds ({result.thresholds ? `≥ ${result.thresholds.min_patch_ha} ha, NDVI drop ≥ ${result.thresholds.ndvi_drop}` : 'see Methods'}). That is not proof that nothing changed.</p>
+          ) : (
+            <ul className="patches">
+              {result.patches.slice(0, 12).map((pt) => (
+                <li key={pt.id}>
+                  <button onClick={() => onFly(pt.lat, pt.lon)}>
+                    <b>{pt.label}</b>
+                    <span>{pt.area_ha} ha · slope {pt.mean_slope_deg}° · NDVI {pt.ndvi_baseline.toFixed(2)} → {pt.ndvi_recent.toFixed(2)} ({pt.robust_z}σ)</span>
+                  </button>
+                </li>
+              ))}
+              {result.patches.length > 12 && <li className="hint">+{result.patches.length - 12} more on the map</li>}
+            </ul>
+          )}
+          {result.has_overlay && (
+            <label className="toggle">
+              <input type="checkbox" checked={show} onChange={(e) => onShow(e.target.checked)} />
+              <span>Show patches on the map <small>magenta</small></span>
+            </label>
+          )}
+          <Sources list={[result.source]} method={
+            'Median clear NDVI in the recent window vs the median of the same weeks in prior years; flagged where NDVI fell '
+            + `by at least ${result.thresholds?.ndvi_drop ?? 0.15} and ${Math.abs(result.thresholds?.robust_z ?? 2)} robust sigmas, on slopes over `
+            + `${result.thresholds?.min_slope_deg ?? 15}°, in patches of at least ${result.thresholds?.min_patch_ha ?? 0.5} ha. The cause is not determined: `
+            + 'clearing, landslides, fire, harvest, drought and residual cloud all lower NDVI.'} />
+        </>
+      )}
+    </section>
+  )
+}
+
+function Sources({ list, method, limits }: { list: SourceRef[]; method: string; limits?: string[] }) {
+  return (
+    <details className="method">
+      <summary>Method and sources</summary>
+      <p>{method}</p>
+      {limits && <ul>{limits.map((l) => <li key={l}>{l}</li>)}</ul>}
+      <ul className="sources">
+        {list.map((s) => (
+          <li key={s.name}>
+            {s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer">{s.name}</a> : s.name}
+            {s.use ? ` - ${s.use}` : ''}{s.licence ? ` · ${s.licence}` : ''}{s.citation ? ` · ${s.citation}` : ''}
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
