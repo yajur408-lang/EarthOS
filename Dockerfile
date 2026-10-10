@@ -21,6 +21,7 @@ WORKDIR /app/backend
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
+COPY backend/seed ./seed
 COPY --from=web /app/frontend/dist /app/frontend/dist
 RUN useradd --create-home earthos
 USER earthos
