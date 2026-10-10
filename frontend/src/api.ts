@@ -192,16 +192,25 @@ async function get<T>(path: string, params?: Record<string, string | number | un
   const qs = params
     ? '?' + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
     : ''
-  const r = await fetch(`${BASE}${path}${qs}`, { signal })
+  const unreachable = 'Can\'t reach the EarthOS data server. If you\'re running locally, start the backend (uvicorn app.main:app --port 8000).'
+  let r: Response
+  try {
+    r = await fetch(`${BASE}${path}${qs}`, { signal })
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e
+    throw new Error(unreachable)
+  }
   if (!r.ok) {
-    let detail = r.statusText
+    let detail: string | null = null
     try {
       const body = await r.json()
       detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
     } catch {
       /* not JSON */
     }
-    throw new Error(`${r.status}: ${detail}`)
+    // A gateway error without our JSON body means the backend itself is down (e.g. the dev proxy couldn't connect).
+    if (detail == null && r.status >= 502 && r.status <= 504) throw new Error(unreachable)
+    throw new Error(detail ?? `${r.status}: ${r.statusText}`)
   }
   return r.json()
 }
