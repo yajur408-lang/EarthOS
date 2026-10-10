@@ -6,7 +6,9 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
-RUN npm run build \n && find dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.json' -o -name '*.svg' \) -size +1k -exec gzip -9 -k {} +
+# Build, then pre-compress text assets so the server can send ready-made .gz files.
+RUN npm run build \
+ && find dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.json' -o -name '*.svg' \) -size +1k -exec gzip -9 -k {} +
 
 # ---- 2. Python runtime ----
 FROM python:3.11-slim
