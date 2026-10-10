@@ -241,7 +241,8 @@ if (config.FRONTEND_DIST / "index.html").exists():
     app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="assets")
     app.mount("/cesiumStatic", StaticFiles(directory=_DIST / "cesiumStatic"), name="cesium")
 
-    @app.get("/{path:path}", include_in_schema=False)
+    # GET and HEAD: hosts and uptime monitors probe the site with HEAD requests.
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def frontend(path: str):
         if path.startswith("api/"):
             raise HTTPException(404, "Not found")
