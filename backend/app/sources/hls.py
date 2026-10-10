@@ -11,6 +11,7 @@ import asyncio
 import datetime as dt
 
 import httpx
+from .. import http
 
 from .. import config
 from ..cache import cached_json
@@ -36,7 +37,7 @@ async def passes(lat: float, lon: float, around: dt.date | None = None) -> list[
     until = min(around + dt.timedelta(days=30), dt.date.today()).isoformat()
 
     async def fetch():
-        async with httpx.AsyncClient(headers={"User-Agent": config.USER_AGENT}) as client:
+        async with http.client(headers={"User-Agent": config.USER_AGENT}) as client:
             results = await asyncio.gather(*(_granules(client, p, lat, lon, since, until) for p in PRODUCTS.values()))
         out = {}
         for sensor, entries in zip(PRODUCTS, results):

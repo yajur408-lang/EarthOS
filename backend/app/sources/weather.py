@@ -6,6 +6,7 @@ Terms: https://api.met.no/doc/TermsOfService - identify with a User-Agent, cache
 from __future__ import annotations
 
 import httpx
+from .. import http
 
 from .. import config
 from ..cache import cached_json
@@ -18,7 +19,7 @@ async def forecast(lat: float, lon: float) -> dict:
     lat, lon = round(lat, 2), round(lon, 2)
 
     async def fetch():
-        async with httpx.AsyncClient() as client:
+        async with http.client() as client:
             r = await client.get(URL, params={"lat": lat, "lon": lon},
                                  headers={"User-Agent": config.USER_AGENT}, timeout=20)
             r.raise_for_status()

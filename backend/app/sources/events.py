@@ -11,6 +11,7 @@ import math
 import re
 
 import httpx
+from .. import http
 
 from .. import config
 from ..cache import cached_json
@@ -28,7 +29,7 @@ def _dist_km(lat1, lon1, lat2, lon2) -> float:
 
 
 def _client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(headers={"User-Agent": config.USER_AGENT}, timeout=30)
+    return http.client(headers={"User-Agent": config.USER_AGENT}, timeout=30)
 
 
 async def natural_events(lat: float, lon: float, radius_km: float = 500, days: int = 365) -> list[dict]:

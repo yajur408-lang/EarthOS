@@ -10,6 +10,7 @@ import io
 import math
 
 import httpx
+from .. import http
 import numpy as np
 from PIL import Image
 
@@ -46,7 +47,7 @@ async def terrain(lat: float, lon: float, km: float) -> dict:
     n = 2 ** ZOOM
     fx, fy = _tile_xy(lat, lon, ZOOM)
     tx, ty = int(fx) % n, int(fy)
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         # 3x3 tiles so the box and the slope window never fall off an edge.
         rows = []
         for dy in (-1, 0, 1):

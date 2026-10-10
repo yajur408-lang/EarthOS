@@ -14,6 +14,7 @@ import datetime as dt
 import math
 
 import httpx
+from .. import http
 
 from .. import config
 from ..cache import cached_json
@@ -94,7 +95,7 @@ async def _mapillary_near(client: httpx.AsyncClient, lat: float, lon: float) -> 
 
 
 async def nearby(lat: float, lon: float) -> dict:
-    async with httpx.AsyncClient(headers={"User-Agent": config.USER_AGENT}) as client:
+    async with http.client(headers={"User-Agent": config.USER_AGENT}) as client:
         kv, mly = await asyncio.gather(_kartaview_near(client, lat, lon), _mapillary_near(client, lat, lon))
     items = sorted(kv + mly, key=lambda i: i["distance_m"])[:150]
     names = [n for p, n in (("kartaview", "KartaView"), ("mapillary", "Mapillary")) if any(i["provider"] == p for i in items)]
@@ -107,7 +108,7 @@ async def nearby(lat: float, lon: float) -> dict:
 
 async def image_url(provider: str, image_id: str, size: str) -> str | None:
     """Resolve an image id to its CDN URL via the provider API (cached)."""
-    async with httpx.AsyncClient(headers={"User-Agent": config.USER_AGENT}) as client:
+    async with http.client(headers={"User-Agent": config.USER_AGENT}) as client:
         if provider == "kartaview":
             async def fetch():
                 r = await client.get(f"{KV}/photo/{image_id}", timeout=25)
@@ -131,7 +132,7 @@ async def sequence_neighbours(provider: str, sequence: str, index: int) -> dict:
     """Previous/next images in a KartaView sequence (drive forward/back like Street View)."""
     if provider != "kartaview":
         return {"prev": None, "next": None}
-    async with httpx.AsyncClient(headers={"User-Agent": config.USER_AGENT}) as client:
+    async with http.client(headers={"User-Agent": config.USER_AGENT}) as client:
         async def get(i):
             async def fetch():
                 r = await client.get(f"{KV}/photo/", params={"sequenceId": sequence, "sequenceIndex": i}, timeout=25)

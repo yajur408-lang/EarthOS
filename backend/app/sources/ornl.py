@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
+from .. import http
 import numpy as np
 
 from ..cache import cached_json
@@ -133,7 +134,7 @@ async def band_series(product: str, band: str, lat: float, lon: float, km: int,
                       start_year: int, end_year: int) -> list[tuple[str, str, np.ndarray]]:
     """[(modis_date, calendar_date, pixel values)] for every date in the year range."""
     lat, lon = round(lat, 4), round(lon, 4)
-    async with httpx.AsyncClient() as client:
+    async with http.client() as client:
         all_dates = await available_dates(client, product, lat, lon)
         # Chunk on fixed positions in the product's full date list, so any year range reuses the same
         # cached chunks (a quick 2-year view and the 10-year record share their overlap).

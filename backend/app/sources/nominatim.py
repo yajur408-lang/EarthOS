@@ -13,6 +13,7 @@ import asyncio
 import time
 
 import httpx
+from .. import http
 
 from .. import config
 from ..cache import cached_json
@@ -28,7 +29,7 @@ async def _request(path: str, params: dict) -> list | dict:
         if wait > 0:
             await asyncio.sleep(wait)
         try:
-            async with httpx.AsyncClient() as client:
+            async with http.client() as client:
                 r = await client.get(f"{config.NOMINATIM_URL}/{path}",
                                      params={**params, "format": "jsonv2"},
                                      headers={"User-Agent": config.USER_AGENT}, timeout=20)

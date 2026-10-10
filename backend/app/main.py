@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import datetime as dt
 import logging
 import math
@@ -16,6 +17,7 @@ from pathlib import Path as FsPath
 from dataclasses import asdict
 
 import httpx
+from . import http
 from fastapi import FastAPI, HTTPException, Path, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from . import analysis, config
+from .cache import cached_json
 from .ratelimit import RateLimit
 from .datasets import DATASETS
 from .places import PLACES
@@ -53,7 +56,7 @@ async def _keep_warm():
     """Ping our own public URL so a free-tier host doesn't sleep (only when KEEP_WARM_URL is set)."""
     if not config.KEEP_WARM_URL:
         return
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with http.client(timeout=30) as client:
         while True:
             await asyncio.sleep(600)
             try:
@@ -133,6 +136,28 @@ def _num(x: float) -> float | None:
     return None if math.isnan(x) else round(float(x), 2)
 
 
+async def _analyse(lat, lon, km, start_year, end_year, ndvi, climate, **kw) -> dict:
+    """analysis.analyse, memoised on disk: it is CPU-heavy (~10 s for 10 years on a small host) and its inputs
+    only change when a new composite or climate day arrives, so the key includes the newest of each."""
+    records = [asdict(c) for c in ndvi]
+    newest = (records[-1]["calendar_date"] if records else "", len(records),
+              str(climate.index.max()) if climate is not None and len(climate) else "")
+    key = f"stats_{lat}_{lon}_{km}_{start_year}_{end_year}_{sorted(kw.items())}_{newest}_v{analysis.VERSION}"
+
+    async def compute():
+        out = await asyncio.to_thread(analysis.analyse, records, climate, **kw)
+        return json.loads(json.dumps(out, default=_json_default))
+    return await cached_json(key, compute)
+
+
+def _json_default(o):
+    if hasattr(o, "item"):  # numpy scalars
+        return o.item()
+    if hasattr(o, "isoformat"):
+        return o.isoformat()
+    raise TypeError(type(o))
+
+
 @app.get("/api/series")
 async def series(
     lat: float = Query(..., ge=-90, le=90),
@@ -168,7 +193,7 @@ async def series(
     if not ndvi and climate is None:
         raise HTTPException(502, ndvi_error or climate_error or "No data found.")
 
-    stats = analysis.analyse([asdict(c) for c in ndvi], climate, z_flag=z, drop=drop) if ndvi else None
+    stats = await _analyse(lat, lon, km, start_year, end_year, ndvi, climate, z_flag=z, drop=drop) if ndvi else None
 
     return {
         "query": {"lat": lat, "lon": lon, "km": km, "start_year": start_year, "end_year": end_year,
@@ -183,16 +208,19 @@ async def series(
         },
         "climate": {
             "dataset": "POWER",
-            "points": [] if climate is None else [
-                {"date": d.strftime("%Y-%m-%d"), **{c: _num(row[c]) for c in climate.columns}}
-                for d, row in climate.iterrows()
-                if d.year >= start_year
-            ],
+            "points": [] if climate is None else _climate_points(climate, start_year),
             "error": climate_error,
         },
         "stats": stats,
         "datasets": DATASETS,
     }
+
+
+def _climate_points(climate, start_year: int) -> list[dict]:
+    df = climate[climate.index.year >= start_year]
+    cols = {c: [_num(v) for v in df[c].tolist()] for c in df.columns}
+    dates = df.index.strftime("%Y-%m-%d").tolist()
+    return [{"date": d, **{c: v[i] for c, v in cols.items()}} for i, d in enumerate(dates)]
 
 
 LatQ = Query(..., ge=-90, le=90)
@@ -244,7 +272,7 @@ async def street_image(provider: str = Path(..., pattern="^(kartaview|mapillary)
         url = await street.image_url(provider, image_id, size)
         if not url:
             raise HTTPException(404, "Image not found.")
-        async with httpx.AsyncClient(follow_redirects=True, headers={"User-Agent": config.USER_AGENT}) as client:
+        async with http.client(follow_redirects=True, headers={"User-Agent": config.USER_AGENT}) as client:
             r = await client.get(url, timeout=40)
             r.raise_for_status()
     except httpx.HTTPError as e:
@@ -308,7 +336,7 @@ async def explain(
     composites = await ornl.ndvi_series(lat, lon, km, start_year, end_year)
     climate = await power.daily_climate(
         lat, lon, (dt.date(start_year, 1, 1) - dt.timedelta(days=analysis.ANTECEDENT_DAYS)).isoformat(), f"{end_year}-12-31")
-    stats = analysis.analyse([asdict(c) for c in composites], climate)
+    stats = await _analyse(lat, lon, km, start_year, end_year, composites, climate)
     ev = next((e for e in stats["events"] if e["start"] == event_start and e["direction"] == direction), None)
     if ev is None:
         raise HTTPException(404, "Event not found for these settings.")

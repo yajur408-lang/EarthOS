@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 
 import httpx
+from .. import http
 import numpy as np
 import pandas as pd
 
@@ -31,11 +32,14 @@ PARAMS = {
 
 
 async def daily_climate(lat: float, lon: float, start: str, end: str) -> pd.DataFrame:
-    latest = (dt.date.today() - dt.timedelta(days=3)).isoformat()
+    # POWER lags a few days. Snap the end to a Monday so the cache key (and the statistics memoised on it)
+    # changes weekly rather than daily.
+    recent = dt.date.today() - dt.timedelta(days=3)
+    latest = (recent - dt.timedelta(days=recent.weekday())).isoformat()
     end = min(end, latest)
 
     async def fetch():
-        async with httpx.AsyncClient() as client:
+        async with http.client() as client:
             r = await client.get(URL, params={
                 "parameters": ",".join(PARAMS),
                 "community": "AG",

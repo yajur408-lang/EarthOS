@@ -37,6 +37,8 @@ MAD_TO_SIGMA = 1.4826
 MIN_SCALE = {"ndvi": 0.03, "precip": 15.0, "tmax": 0.5}
 MIN_DEVIATION = 0.05  # NDVI units; smaller departures are not flagged however unusual
 POOL_SLOTS = 1  # also use the neighbouring 16-day slot on each side of the season
+# Bump when the statistics change, so memoised results (and the seed) are recomputed.
+VERSION = 2
 Z_FLAG = 2.0
 THRESHOLD_DROP = 0.10
 ANTECEDENT_DAYS = 32  # rainfall window = the 16-day composite plus the preceding 32 days
