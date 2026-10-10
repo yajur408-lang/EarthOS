@@ -32,7 +32,12 @@ CACHE_DIR = Path(os.environ.get("CACHE_DIR", _BACKEND / "data" / "cache"))
 FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", _BACKEND.parent / "frontend" / "dist"))
 RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "240"))
 # Example places whose satellite record is downloaded in the background at startup, so they open instantly.
-PREWARM_PLACES = [p for p in os.environ.get("PREWARM_PLACES", "guanacaste").split(",") if p.strip()]
+PREWARM_PLACES = [p for p in os.environ.get("PREWARM_PLACES", "guanacaste,tempisque,san-carlos,osa,chirripo").split(",") if p.strip()]
+# Pre-computed data for the featured places, copied into the cache at startup (see scripts/build_seed.py).
+SEED_DIR = Path(os.environ.get("SEED_DIR", _BACKEND / "seed"))
+# Optional: the service's own public URL. When set, the server pings itself every 10 minutes so a
+# free-tier host doesn't put it to sleep. Uses ~744 instance-hours/month (Render free tier allows 750).
+KEEP_WARM_URL = os.environ.get("KEEP_WARM_URL", "").rstrip("/")
 
 
 def key_status() -> dict[str, bool]:

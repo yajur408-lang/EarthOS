@@ -1,0 +1,58 @@
+"""Pre-compute the featured (Costa Rica) places into backend/seed so the deployed server opens them instantly.
+
+Run from backend/:  python -m scripts.build_seed
+It fetches everything the place card needs into an empty cache, then that cache becomes the seed.
+Re-run occasionally (e.g. monthly) to refresh; the server still fetches newer composites on its own.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import datetime as dt
+import os
+import shutil
+import sys
+from pathlib import Path
+
+BACKEND = Path(__file__).resolve().parent.parent
+SEED = BACKEND / "seed"
+TMP = BACKEND / "data" / "seed-build"
+os.environ["CACHE_DIR"] = str(TMP)  # must be set before the app modules import config
+os.environ["SEED_DIR"] = str(BACKEND / "no-seed")  # don't copy the old seed into the build cache
+sys.path.insert(0, str(BACKEND))
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.main import app  # noqa: E402
+from app.places import FEATURED  # noqa: E402
+
+
+def main():
+    if TMP.exists():
+        shutil.rmtree(TMP)
+    year = dt.date.today().year
+    c = TestClient(app)
+    for p in FEATURED:
+        q = {"lat": p["lat"], "lon": p["lon"], "km": p["km"]}
+        rng = {**q, "start_year": year - 9, "end_year": year}
+        print(f"{p['name']}: series", flush=True)
+        s = c.get("/api/series", params=rng).json()
+        c.get("/api/series", params={**rng, "start_year": year})  # the quick current-year view
+        for kind in ("evi", "lst", "burned", "landcover"):
+            print(f"  {kind}", flush=True)
+            c.get(f"/api/extra/{kind}", params=rng)
+        c.get("/api/terrain", params=q)
+        c.get("/api/street", params={"lat": p["lat"], "lon": p["lon"]})
+        c.get("/api/reverse", params={"lat": p["lat"], "lon": p["lon"]})
+        for ev in (s.get("stats") or {}).get("events", [])[:4]:
+            c.get("/api/explain", params={**rng, "event_start": ev["start"], "direction": ev["direction"]})
+    # Keep only long-lived data (MODIS, terrain, imagery lookups); short-lived caches refresh on the server.
+    if SEED.exists():
+        shutil.rmtree(SEED)
+    shutil.copytree(TMP, SEED, ignore=shutil.ignore_patterns("metno_*", "hls_*", "eonet_*", "usgs_*", "who_*", "gdelt_*"))
+    size = sum(f.stat().st_size for f in SEED.rglob("*") if f.is_file())
+    print(f"seed: {sum(1 for f in SEED.rglob('*') if f.is_file())} files, {size / 1e6:.1f} MB")
+
+
+if __name__ == "__main__":
+    main()

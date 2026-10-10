@@ -38,6 +38,7 @@ def test_accepts_any_latitude(monkeypatch):
     assert c.get("/api/series", params={"lat": 91, "lon": 0}).status_code == 422
 
 
-def test_places_cover_several_continents():
-    countries = {p["country"] for p in TestClient(main.app).get("/api/places").json()}
-    assert len(countries) >= 6
+def test_featured_places_are_costa_rica_and_others_span_continents():
+    places = TestClient(main.app).get("/api/places").json()
+    assert {p["country"] for p in places if p.get("featured")} == {"Costa Rica"}
+    assert len({p["country"] for p in places}) >= 4

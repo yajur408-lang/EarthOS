@@ -78,6 +78,7 @@ NDVI_SCALE = 0.0001
 VI_FILL = -3000
 # MOD13Q1 pixel reliability: 0 = good, 1 = marginal, 2 = snow/ice, 3 = cloudy, -1 = fill
 USABLE_RELIABILITY = (0, 1)
+GOOD_ENOUGH = 0.3  # use only 'good' pixels when at least this share of the box is good
 
 IGBP_CLASSES = {
     1: "Evergreen needleleaf forest", 2: "Evergreen broadleaf forest", 3: "Deciduous needleleaf forest",
@@ -91,9 +92,11 @@ IGBP_CLASSES = {
 class Composite:
     modis_date: str  # e.g. "A2020017"
     calendar_date: str  # "2020-01-17"
-    ndvi_mean: float | None  # mean NDVI over usable pixels
-    usable_fraction: float  # share of pixels that passed the QA mask
+    ndvi_mean: float | None  # mean NDVI over the pixels used (see _vi_series)
+    usable_fraction: float  # share of pixels rated good or marginal (pixel reliability 0-1)
     n_pixels: int
+    good_fraction: float = 0.0  # share rated good (reliability 0)
+    cloudy_fraction: float = 0.0  # share rated cloudy (reliability 3)
 
 
 def _key(*parts: object) -> str:
@@ -164,12 +167,17 @@ async def _vi_series(band: str, lat, lon, km, start_year, end_year) -> list[Comp
     rel_by = {md: v for md, _, v in rel}
     out = []
     for md, cd, values in vi:
-        mask = values != VI_FILL
-        if md in rel_by:
-            mask &= np.isin(rel_by[md], USABLE_RELIABILITY)
-        good = values[mask] * NDVI_SCALE
-        out.append(Composite(md, cd, float(good.mean()) if good.size else None,
-                             float(mask.mean()) if values.size else 0.0, int(values.size)))
+        valid = values != VI_FILL
+        r = rel_by.get(md, np.zeros_like(values))
+        good = valid & (r == 0)
+        usable = valid & np.isin(r, USABLE_RELIABILITY)
+        # "Marginal" pixels include cloud edges, haze and shadow. Use only good pixels when there are
+        # enough of them; otherwise fall back to good+marginal (the analysis then treats it as low quality).
+        use = good if good.mean() >= GOOD_ENOUGH else usable
+        v = values[use] * NDVI_SCALE
+        n = max(values.size, 1)
+        out.append(Composite(md, cd, float(v.mean()) if v.size else None, float(usable.sum() / n), int(values.size),
+                             good_fraction=float(good.sum() / n), cloudy_fraction=float((valid & (r == 3)).sum() / n)))
     return out
 
 

@@ -19,22 +19,25 @@ CMR = "https://cmr.earthdata.nasa.gov/search/granules.json"
 PRODUCTS = {"S30": "HLSS30", "L30": "HLSL30"}
 
 
-async def _granules(client: httpx.AsyncClient, short_name: str, lat: float, lon: float, since: str) -> list[dict]:
+async def _granules(client: httpx.AsyncClient, short_name: str, lat: float, lon: float, since: str, until: str) -> list[dict]:
     r = await client.get(CMR, params={
         "short_name": short_name, "version": "2.0", "point": f"{lon},{lat}",
-        "temporal": f"{since}T00:00:00Z,", "sort_key": "-start_date", "page_size": 100,
+        "temporal": f"{since}T00:00:00Z,{until}T23:59:59Z", "sort_key": "-start_date", "page_size": 100,
     }, timeout=40)
     r.raise_for_status()
     return r.json()["feed"]["entry"]
 
 
-async def passes(lat: float, lon: float, days: int = 180) -> list[dict]:
+async def passes(lat: float, lon: float, around: dt.date | None = None) -> list[dict]:
+    """Passes from ~5 months before to ~1 month after `around` (default today)."""
     lat, lon = round(lat, 2), round(lon, 2)
-    since = (dt.date.today() - dt.timedelta(days=days)).isoformat()
+    around = around or dt.date.today()
+    since = (around - dt.timedelta(days=150)).isoformat()
+    until = min(around + dt.timedelta(days=30), dt.date.today()).isoformat()
 
     async def fetch():
         async with httpx.AsyncClient(headers={"User-Agent": config.USER_AGENT}) as client:
-            results = await asyncio.gather(*(_granules(client, p, lat, lon, since) for p in PRODUCTS.values()))
+            results = await asyncio.gather(*(_granules(client, p, lat, lon, since, until) for p in PRODUCTS.values()))
         out = {}
         for sensor, entries in zip(PRODUCTS, results):
             for e in entries:
@@ -46,4 +49,4 @@ async def passes(lat: float, lon: float, days: int = 180) -> list[dict]:
                     out[key] = {"sensor": sensor, "date": date, "cloud_pct": cloud}
         return sorted(out.values(), key=lambda p: p["date"], reverse=True)
 
-    return await cached_json(f"hls_{lat}_{lon}_{since}", fetch, max_age_days=0.25)
+    return await cached_json(f"hls_{lat}_{lon}_{since}_{until}", fetch, max_age_days=0.25 if until >= (dt.date.today() - dt.timedelta(days=2)).isoformat() else None)

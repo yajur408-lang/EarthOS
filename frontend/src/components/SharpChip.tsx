@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { HlsPass } from '../api'
 import { useBus, type Bus } from '../bus'
-import { SHARP_BELOW_M } from '../useSharpImagery'
+import { daysBefore, SHARP_BELOW_M } from '../useSharpImagery'
 import { prettyDate } from '../util'
 import type { ViewState } from './Globe'
 
@@ -9,14 +9,20 @@ const SENSOR = { S30: 'Sentinel-2', L30: 'Landsat' } as const
 
 interface Props {
   view: Bus<ViewState>
+  date: string
   pass: HlsPass | null
   passes: HlsPass[]
   loading: boolean
   onChoose: (p: HlsPass) => void
 }
 
-/** Shows which 30 m pass is on screen when zoomed in, and lets the user pick another. */
-export default function SharpChip({ view, pass, passes, loading, onChoose }: Props) {
+const gap = (p: HlsPass, date: string) => {
+  const d = daysBefore(p, date)
+  return d === 0 ? 'same day' : d > 0 ? `${d} day${d === 1 ? '' : 's'} before` : `${-d} day${d === -1 ? '' : 's'} after`
+}
+
+/** Says which 30 m pass is on screen, how far it is from the chosen date, and lets you pick another. */
+export default function SharpChip({ view, date, pass, passes, loading, onChoose }: Props) {
   const { heightM } = useBus(view)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -27,29 +33,30 @@ export default function SharpChip({ view, pass, passes, loading, onChoose }: Pro
   }, [])
 
   if (heightM > SHARP_BELOW_M) return null
-  const sorted = [...passes].sort((a, b) => a.cloud_pct - b.cloud_pct || b.date.localeCompare(a.date)).slice(0, 20)
+  const far = pass ? Math.abs(daysBefore(pass, date)) > 30 : false
   return (
     <div className="sharp" ref={ref}>
-      <button className="sharp-chip" onClick={() => setOpen(!open)} aria-expanded={open} title="30 m satellite pass shown when zoomed in">
+      <button className={`sharp-chip ${far ? 'far' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open}
+        title="The sharp 30 m imagery shown when zoomed in">
         <span className="dot-live" aria-hidden />
         {loading && !pass ? 'Finding a clear 30 m pass…'
-          : pass ? <>30 m · {SENSOR[pass.sensor]} · {prettyDate(pass.date)} · {Math.round(pass.cloud_pct)}% cloud ▾</>
-            : 'No 30 m pass found here'}
+          : pass ? <>30 m imagery: {prettyDate(pass.date)} ({gap(pass, date)}) ▾</>
+            : 'No 30 m pass near this date'}
       </button>
-      {open && sorted.length > 0 && (
+      {open && passes.length > 0 && (
         <div className="sharp-menu" role="listbox" aria-label="30 m satellite passes">
-          <h4>Clearest passes in the last 6 months</h4>
-          {sorted.map((p) => (
+          <h4>Passes near {prettyDate(date)}, best first</h4>
+          {passes.slice(0, 20).map((p) => (
             <button key={p.sensor + p.date} role="option" aria-selected={pass?.date === p.date && pass.sensor === p.sensor}
               className={pass?.date === p.date && pass.sensor === p.sensor ? 'on' : ''}
               onClick={() => { onChoose(p); setOpen(false) }}>
               <span>{prettyDate(p.date)}</span>
               <small>{SENSOR[p.sensor]}</small>
               <b style={{ width: `${Math.max(4, 100 - p.cloud_pct) * 0.6}px` }} aria-hidden />
-              <em>{Math.round(p.cloud_pct)}% cloud</em>
+              <em>{Math.round(p.cloud_pct)}% tile cloud</em>
             </button>
           ))}
-          <p>Cloud cover is reported per 110 km tile, so the spot you're viewing may be clearer or cloudier.</p>
+          <p>Ranked by cloud and closeness to the date bar. NASA reports cloud for the whole 110 km tile, so your spot may still have clouds - try the next pass.</p>
         </div>
       )}
     </div>

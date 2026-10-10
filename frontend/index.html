@@ -3,14 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="EarthOS - investigate vegetation change on a 3D globe with NASA satellite data and evidence-grounded explanations." />
-    <title>EarthOS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1220" />
+    <meta name="description" content="EarthOS shows how vegetation anywhere on Earth compares with its normal season, flags unusual changes with satellite quality checks, and lays out the weather, fire and land-cover evidence behind each one." />
+    <meta property="og:title" content="EarthOS - see how vegetation changes, and check why" />
+    <meta property="og:description" content="Open NASA satellite data, quality-checked anomaly detection and evidence-based explanations, on a 3D globe." />
+    <title>EarthOS - see how vegetation changes, and check why</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" />
+    <style>
+      /* Painted before any JavaScript loads, so a cold start never shows a blank screen. */
+      html, body { margin: 0; height: 100%; background: #05080f; }
+      .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+        font: 15px/1.4 Roboto, system-ui, sans-serif; color: #e8eaed;
+        background: radial-gradient(circle at 50% 40%, #13305a 0, #05080f 62%); }
+      .boot-globe { width: 84px; height: 84px; border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #7dd3fc, #16a34a 55%, #0b3d2e);
+        box-shadow: 0 0 60px rgba(56, 189, 248, 0.35); animation: boot-spin 3s linear infinite; }
+      .boot b { font-size: 26px; letter-spacing: 0.5px; font-weight: 500; }
+      .boot span { color: #9aa0a6; font-size: 13px; text-align: center; padding: 0 24px; }
+      @keyframes boot-spin { from { filter: hue-rotate(0deg); transform: rotate(0deg); } to { filter: hue-rotate(20deg); transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot" role="status" aria-live="polite">
+        <div class="boot-globe" aria-hidden="true"></div>
+        <b>EarthOS</b>
+        <span id="boot-msg">Loading…</span>
+      </div>
+    </div>
+    <script>
+      // If the server was asleep (free hosting), say so instead of looking broken.
+      setTimeout(function () {
+        var m = document.getElementById('boot-msg')
+        if (m) m.textContent = 'Waking up the server - this can take up to a minute after a quiet spell…'
+      }, 4000)
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

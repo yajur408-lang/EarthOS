@@ -6,6 +6,7 @@ export interface Place {
   lon: number
   km: number
   about?: string
+  featured?: boolean
 }
 
 export interface GeoResult {
@@ -51,7 +52,13 @@ export interface ClimatePoint {
 
 export interface StatPoint {
   date: string
+  /** Trusted value used for statistics (null when the composite failed quality control). */
   ndvi: number | null
+  /** Value as measured, shown faintly even when not trusted. */
+  ndvi_raw: number | null
+  good_fraction: number | null
+  cloudy_fraction: number | null
+  trusted: boolean
   ndvi_expected: number | null
   ndvi_sigma: number | null
   ndvi_z: number | null
@@ -82,14 +89,41 @@ export interface AnomalyEvent {
   tmax_z: number | null
   within_1sigma_within_3_composites: boolean | null
   threshold_flags_in_event: number
+  good_fraction: number
+  seasonal_rise: number | null
+  prior_precip_pct: number | null
+  checks: QualityCheck[]
+  explanation: Explanation
+}
+
+export interface QualityCheck { check: string; status: 'pass' | 'warn' | 'fail'; detail: string }
+export interface Driver {
+  id: string
+  title: string
+  level: 'supported' | 'possible' | 'not supported'
+  for: string[]
+  against: string[]
+  sources: string[]
+}
+export interface Explanation {
+  confidence: 'high' | 'medium' | 'low'
+  summary: string
+  drivers: Driver[]
+  caveat: string
+}
+export interface ExplainResult {
+  event: AnomalyEvent
+  context: { burned_pct: number | null; landcover_change: { changed: boolean; detail: string } | null }
+  notes: string[]
 }
 
 export interface Stats {
-  params: { z: number; drop: number; min_usable_fraction: number; min_baseline_years: number; antecedent_days: number }
+  params: { z: number; drop: number; min_usable_fraction: number; min_baseline_years: number; antecedent_days: number; min_deviation: number }
   series: StatPoint[]
   events: AnomalyEvent[]
   methods: {
     composites_evaluated: number
+    composites_excluded_quality: number
     threshold_flags: number
     seasonal_below_flags: number
     seasonal_above_flags: number
@@ -175,14 +209,10 @@ export interface Quake {
   title: string; magnitude: number; date: string; distance_km: number; depth_km: number
   lat: number; lon: number; url: string; source: string
 }
-export interface Outbreak { title: string; date: string; url: string; matches_country: boolean; source: string }
-export interface Headline { title: string; url: string; domain: string; language: string; date: string | null; source: string }
 export interface EventsResult {
   natural: NaturalEvent[]
   earthquakes: Quake[]
-  outbreaks: Outbreak[]
-  news: Headline[]
-  errors: Partial<Record<'natural' | 'earthquakes' | 'outbreaks' | 'news', string>>
+  errors: Partial<Record<'natural' | 'earthquakes', string>>
   attribution: string
 }
 
@@ -229,9 +259,10 @@ export const api = {
     `${BASE}/api/street/image/${img.provider}/${img.id}?size=${size}`,
   streetSequence: (img: StreetImage) =>
     get<{ prev: StreetImage | null; next: StreetImage | null }>(`/api/street/sequence/${img.provider}/${img.sequence}/${img.sequence_index ?? 0}`),
-  sharp: (lat: number, lon: number, signal?: AbortSignal) =>
-    get<{ passes: HlsPass[]; attribution: string }>('/api/sharp-imagery', { lat, lon }, signal),
+  sharp: (lat: number, lon: number, date: string, signal?: AbortSignal) =>
+    get<{ passes: HlsPass[]; attribution: string }>('/api/sharp-imagery', { lat, lon, date }, signal),
+  explain: (p: { lat: number; lon: number; km: number; start_year: number; end_year: number; event_start: string; direction: string }, signal?: AbortSignal) =>
+    get<ExplainResult>('/api/explain', p, signal),
   weather: (lat: number, lon: number, signal?: AbortSignal) => get<Forecast>('/api/weather', { lat, lon }, signal),
-  events: (p: { lat: number; lon: number; place?: string; country?: string }, signal?: AbortSignal) =>
-    get<EventsResult>('/api/events', p, signal),
+  events: (p: { lat: number; lon: number }, signal?: AbortSignal) => get<EventsResult>('/api/events', p, signal),
 }

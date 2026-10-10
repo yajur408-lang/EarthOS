@@ -31,8 +31,39 @@ from .sources import events, hls, nominatim, ornl, power, street, terrain, weath
 log = logging.getLogger("uvicorn.error")
 
 
+def _seed_cache():
+    """Copy the pre-computed featured-place data into the cache (keeps original timestamps, so
+    time-limited entries like the MODIS date list still refresh on schedule)."""
+    import shutil
+    if not config.SEED_DIR.is_dir():
+        return 0
+    config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for f in config.SEED_DIR.rglob("*"):
+        if f.is_file():
+            dest = config.CACHE_DIR / f.relative_to(config.SEED_DIR)
+            if not dest.exists():
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(f, dest)
+                n += 1
+    return n
+
+
+async def _keep_warm():
+    """Ping our own public URL so a free-tier host doesn't sleep (only when KEEP_WARM_URL is set)."""
+    if not config.KEEP_WARM_URL:
+        return
+    async with httpx.AsyncClient(timeout=30) as client:
+        while True:
+            await asyncio.sleep(600)
+            try:
+                await client.get(f"{config.KEEP_WARM_URL}/api/health")
+            except httpx.HTTPError:
+                pass
+
+
 async def _prewarm():
-    """Download the example places' satellite records in the background so they open instantly."""
+    """Refresh the featured places' newest composites in the background (the seed covers the rest)."""
     await asyncio.sleep(3)
     year = dt.date.today().year
     for pid in config.PREWARM_PLACES:
@@ -51,9 +82,13 @@ async def _prewarm():
 
 @contextlib.asynccontextmanager
 async def lifespan(_app):
-    task = asyncio.create_task(_prewarm())
+    seeded = _seed_cache()
+    if seeded:
+        log.info("seeded %d cached files for featured places", seeded)
+    tasks = [asyncio.create_task(_prewarm()), asyncio.create_task(_keep_warm())]
     yield
-    task.cancel()
+    for t in tasks:
+        t.cancel()
 
 
 app = FastAPI(title="EarthOS API", version="0.3.0", lifespan=lifespan)
@@ -240,35 +275,86 @@ async def _safe(coro):
 
 
 @app.get("/api/events")
-async def nearby_events(lat: float = LatQ, lon: float = LonQ,
-                        place: str | None = Query(None, max_length=120), country: str | None = Query(None, max_length=80)):
-    """Natural events, earthquakes, outbreak notices and news headlines - listed, not interpreted."""
-    (nat, e1), (eq, e2), (who, e3), (headlines, e4) = await asyncio.gather(
-        _safe(events.natural_events(lat, lon)),
-        _safe(events.earthquakes(lat, lon)),
-        _safe(events.outbreaks(country)),
-        _safe(events.news(place, country)) if (place or country) else _noop(),
-    )
+async def nearby_events(lat: float = LatQ, lon: float = LonQ):
+    """Nearby natural events and earthquakes (optional context, hidden by default in the UI)."""
+    (nat, e1), (eq, e2) = await asyncio.gather(_safe(events.natural_events(lat, lon)), _safe(events.earthquakes(lat, lon)))
     return {
-        "natural": nat, "earthquakes": eq, "outbreaks": who, "news": headlines,
-        "errors": {k: v for k, v in {"natural": e1, "earthquakes": e2, "outbreaks": e3, "news": e4}.items() if v},
-        "attribution": "NASA EONET · USGS Earthquake Hazards Program · WHO Disease Outbreak News (links) · The GDELT Project",
+        "natural": nat, "earthquakes": eq,
+        "errors": {k: v for k, v in {"natural": e1, "earthquakes": e2}.items() if v},
+        "attribution": "NASA EONET · USGS Earthquake Hazards Program",
     }
 
 
-async def _noop():
-    return [], None
-
-
 @app.get("/api/sharp-imagery")
-async def sharp_imagery(lat: float = LatQ, lon: float = LonQ, days: int = Query(180, ge=7, le=730)):
-    """Recent 30 m HLS passes over a point with granule cloud cover (for picking a clear one)."""
+async def sharp_imagery(lat: float = LatQ, lon: float = LonQ,
+                        date: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    """30 m HLS passes over a point around a date (default today), with granule cloud cover."""
     try:
-        return {"passes": await hls.passes(lat, lon, days),
+        around = dt.date.fromisoformat(date) if date else dt.date.today()
+        return {"passes": await hls.passes(lat, lon, around),
                 "attribution": "NASA HLS v2.0 (Landsat 8/9 OLI, Sentinel-2 MSI) via NASA GIBS; contains modified Copernicus Sentinel data"}
     except httpx.HTTPError as e:
         raise HTTPException(502, f"NASA CMR unavailable: {e}") from e
 
+
+
+@app.get("/api/explain")
+async def explain(
+    lat: float = LatQ, lon: float = LonQ, km: int = Query(1, ge=0, le=10),
+    start_year: int = Query(dt.date.today().year - 9, ge=2000), end_year: int = Query(dt.date.today().year),
+    event_start: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"), direction: str = Query(..., pattern="^(below|above)$"),
+):
+    """Re-check one event with extra evidence: burned area (MCD64A1) and land-cover change (MCD12Q1)."""
+    composites = await ornl.ndvi_series(lat, lon, km, start_year, end_year)
+    climate = await power.daily_climate(
+        lat, lon, (dt.date(start_year, 1, 1) - dt.timedelta(days=analysis.ANTECEDENT_DAYS)).isoformat(), f"{end_year}-12-31")
+    stats = analysis.analyse([asdict(c) for c in composites], climate)
+    ev = next((e for e in stats["events"] if e["start"] == event_start and e["direction"] == direction), None)
+    if ev is None:
+        raise HTTPException(404, "Event not found for these settings.")
+
+    start, end = dt.date.fromisoformat(ev["start"]), dt.date.fromisoformat(ev["end"]) + dt.timedelta(days=16)
+    context: dict = {"burned_pct": None, "landcover_change": None}
+    notes = []
+    burned, lc = await asyncio.gather(
+        ornl.burned_series(lat, lon, km, start.year, end.year),
+        ornl.landcover_series(lat, lon, km, start.year - 1, end.year + 1),
+        return_exceptions=True)
+    if isinstance(burned, list):
+        window = [b for b in burned if b["burned_fraction"] is not None
+                  and start - dt.timedelta(days=31) <= dt.date.fromisoformat(b["date"]) <= end]
+        context["burned_pct"] = round(100 * max((b["burned_fraction"] for b in window), default=0.0), 1)
+    else:
+        notes.append("Burned-area data unavailable right now.")
+    if isinstance(lc, list) and lc:
+        before = next((y for y in lc if y["year"] == start.year - 1), None)
+        after = next((y for y in reversed(lc) if y["year"] >= end.year), None)
+        if before and after and after["year"] != before["year"]:
+            classes = set(before["classes"]) | set(after["classes"])
+            shift = max(abs(after["classes"].get(c, 0) - before["classes"].get(c, 0)) for c in classes)
+            top = lambda y: max(y["classes"], key=y["classes"].get)  # noqa: E731
+            context["landcover_change"] = {
+                "changed": shift >= 0.15,
+                "detail": f"land cover shifted {shift:.0%} between {before['year']} and {after['year']} "
+                          f"(main class {top(before).lower()} -> {top(after).lower()})",
+            }
+        else:
+            notes.append("Land cover for the year after this event isn't published yet (MODIS land cover lags ~1-2 years).")
+    elif isinstance(lc, list):
+        notes.append("Land cover for these years isn't published yet (MODIS land cover lags ~1-2 years).")
+    else:
+        notes.append("Land-cover data unavailable right now.")
+    ev["explanation"] = analysis.explain_event(ev, context)
+    return {"event": ev, "context": context, "notes": notes,
+            "sources": {k: analysis_sources[k] for k in ("MOD13Q1", "POWER", "MCD64A1", "MCD12Q1")}}
+
+
+analysis_sources = {
+    "MOD13Q1": {"name": "MODIS/Terra Vegetation Indices 16-Day 250 m v061", "doi": "10.5067/MODIS/MOD13Q1.061"},
+    "POWER": {"name": "NASA POWER daily weather", "doi": None, "url": "https://power.larc.nasa.gov/"},
+    "MCD64A1": {"name": "MODIS Burned Area Monthly 500 m v061", "doi": "10.5067/MODIS/MCD64A1.061"},
+    "MCD12Q1": {"name": "MODIS Land Cover Type Yearly 500 m v061", "doi": "10.5067/MODIS/MCD12Q1.061"},
+}
 
 # ---------- serve the built frontend (production: one service, one URL) ----------
 if (config.FRONTEND_DIST / "index.html").exists():

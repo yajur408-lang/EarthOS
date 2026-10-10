@@ -29,7 +29,8 @@ def test_regular_seasonal_cycle_is_not_flagged():
 
 
 def test_out_of_season_drop_is_one_below_event():
-    out = analysis.analyse(synthetic(shift_year=2020, shift_doys=(145, 161, 177)), None)
+    # Mid-season (stable) slots, so the pooled seasonal window doesn't straddle the green-up.
+    out = analysis.analyse(synthetic(shift_year=2020, shift_doys=(225, 241, 257)), None)
     below = [e for e in out["events"] if e["direction"] == "below"]
     assert len(below) == 1 and below[0]["composites"] == 3 and below[0]["start"].startswith("2020")
 
@@ -45,9 +46,23 @@ def test_cloudy_composites_are_left_out():
     assert analysis.analyse(rows, None)["series"][10]["ndvi"] is None
 
 
-def test_events_contain_statistics_not_interpretations():
-    out = analysis.analyse(synthetic(shift_year=2020, shift_doys=(145, 161, 177)), None)
-    assert not {"hypotheses", "explanation", "cause"} & out["events"][0].keys()
+def test_events_carry_checks_and_hedged_explanations():
+    out = analysis.analyse(synthetic(shift_year=2020, shift_doys=(225, 241, 257)), None)
+    ev = out["events"][0]
+    assert {c["check"] for c in ev["checks"]} >= {"Cloud-free pixels", "Persistence", "Size of change"}
+    x = ev["explanation"]
+    assert x["confidence"] in {"high", "medium", "low"} and x["drivers"]
+    assert "caused by" not in x["summary"].lower()
+
+
+def test_cloudy_composite_is_shown_but_never_flagged():
+    rows = synthetic()
+    i = next(k for k, r in enumerate(rows) if r["modis_date"] == "A2020241")
+    rows[i].update(ndvi_mean=0.2, good_fraction=0.0, cloudy_fraction=0.7, usable_fraction=0.3)
+    out = analysis.analyse(rows, None)
+    rec = out["series"][i]
+    assert rec["ndvi"] is None and rec["ndvi_raw"] == 0.2 and not rec["flag_below"]
+    assert out["methods"]["composites_excluded_quality"] == 1
 
 
 def test_short_record_warns_instead_of_failing():

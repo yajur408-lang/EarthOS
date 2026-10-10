@@ -115,24 +115,22 @@ export function WeatherPanel({ lat, lon }: { lat: number; lon: number }) {
   )
 }
 
-export function NewsPanel({ data, loading, error, retry, country, onFly }: {
+export function NewsPanel({ data, loading, error, retry, onFly }: {
   data: EventsResult | null
   loading: boolean
   error: string | null
   retry: () => void
-  country: string | null
   onFly: (lat: number, lon: number) => void
 }) {
-  if (loading) return <p className="hint">Loading events and news…</p>
+  if (loading) return <p className="hint">Loading nearby events…</p>
   if (error) return <div className="alert soft">Unavailable: {error} <button className="link" onClick={retry}>Retry</button></div>
   if (!data) return null
-  const who = data.outbreaks.filter((o) => o.matches_country).concat(data.outbreaks.filter((o) => !o.matches_country).slice(0, 6))
   return (
     <>
-      <p className="hint first">Listed as published, by date and distance. EarthOS does not link these to the data above.</p>
+      <p className="hint first">Context only: listed by date and distance. EarthOS doesn't link these to the vegetation data.</p>
 
       <h3>Natural events within 500 km <small>past year · NASA EONET</small></h3>
-      {data.errors.natural && <p className="hint">Unavailable: {data.errors.natural}</p>}
+      {data.errors.natural && <p className="hint">Unavailable right now.</p>}
       {!data.natural.length && !data.errors.natural && <p className="hint">None recorded.</p>}
       <ul className="feed">
         {data.natural.slice(0, 12).map((e) => (
@@ -140,54 +138,22 @@ export function NewsPanel({ data, loading, error, retry, country, onFly }: {
             <button className="feed-dot orange" onClick={() => onFly(e.lat, e.lon)} title="Show on globe" aria-label={`Show ${e.title} on globe`} />
             <div>
               <a href={e.url ?? undefined} target="_blank" rel="noreferrer">{e.title}</a>
-              <span>{e.category} · {e.first_date}{e.closed ? ` – ${e.closed}` : ' (open)'} · {e.distance_km} km away</span>
+              <span>{e.category} · {e.first_date}{e.closed ? ` – ${e.closed}` : ' (ongoing)'} · {e.distance_km} km away</span>
             </div>
           </li>
         ))}
       </ul>
 
       <h3>Earthquakes M3+ within 300 km <small>past year · USGS</small></h3>
-      {data.errors.earthquakes && <p className="hint">Unavailable: {data.errors.earthquakes}</p>}
+      {data.errors.earthquakes && <p className="hint">Unavailable right now.</p>}
       {!data.earthquakes.length && !data.errors.earthquakes && <p className="hint">None recorded.</p>}
       <ul className="feed">
-        {data.earthquakes.slice(0, 10).map((q) => (
+        {data.earthquakes.slice(0, 8).map((q) => (
           <li key={q.url}>
             <button className="feed-dot red" onClick={() => onFly(q.lat, q.lon)} title="Show on globe" aria-label={`Show ${q.title} on globe`} />
             <div>
               <a href={q.url} target="_blank" rel="noreferrer">{q.title}</a>
               <span>{q.date} · depth {Math.round(q.depth_km)} km · {q.distance_km} km away</span>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <h3>Disease outbreak notices <small>WHO</small></h3>
-      {data.errors.outbreaks && <p className="hint">Unavailable: {data.errors.outbreaks}</p>}
-      {country && !data.outbreaks.some((o) => o.matches_country) && !data.errors.outbreaks && (
-        <p className="hint">No recent notice names {country}. Latest worldwide:</p>
-      )}
-      <ul className="feed">
-        {who.map((o) => (
-          <li key={o.url}>
-            <span className={`feed-dot ${o.matches_country ? 'purple' : 'grey'}`} aria-hidden />
-            <div>
-              <a href={o.url} target="_blank" rel="noreferrer">{o.title}</a>
-              <span>{o.date}{o.matches_country ? ` · mentions ${country}` : ''}</span>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <h3>Environment news <small>past 30 days · GDELT</small></h3>
-      {data.errors.news && <p className="hint">Unavailable: {data.errors.news} <button className="link" onClick={retry}>Retry</button></p>}
-      {!data.news.length && !data.errors.news && <p className="hint">No matching headlines.</p>}
-      <ul className="feed">
-        {data.news.slice(0, 15).map((n) => (
-          <li key={n.url}>
-            <span className="feed-dot blue" aria-hidden />
-            <div>
-              <a href={n.url} target="_blank" rel="noreferrer">{n.title}</a>
-              <span>{n.domain}{n.date ? ` · ${n.date}` : ''}{n.language && n.language !== 'English' ? ` · ${n.language}` : ''}</span>
             </div>
           </li>
         ))}

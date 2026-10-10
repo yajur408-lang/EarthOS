@@ -1,20 +1,14 @@
-"""Nearby natural events, earthquakes, disease-outbreak notices and news headlines.
+"""Nearby natural events and earthquakes, listed by date and distance (optional context).
 
-Listed by distance/date as published - EarthOS does not link them to the
-environmental data or draw conclusions from them.
-
-* NASA EONET v3       - natural events (wildfires, storms, floods, volcanoes ...). NASA open data.
-* USGS FDSN events    - earthquakes. US public domain.
-* WHO Disease Outbreak News - titles and links only (WHO content is copyrighted; we link out).
-* GDELT DOC 2.0       - news headlines and links. Free for any use with citation.
+* NASA EONET v3     - natural events (wildfires, storms, floods, volcanoes ...). NASA open data.
+* USGS FDSN events  - earthquakes. US public domain.
 """
 
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import math
-import time
+import re
 
 import httpx
 
@@ -23,11 +17,7 @@ from ..cache import cached_json
 
 EONET = "https://eonet.gsfc.nasa.gov/api/v3/events"
 USGS = "https://earthquake.usgs.gov/fdsnws/event/1/query"
-WHO = "https://www.who.int/api/news/diseaseoutbreaknews"
-GDELT = "https://api.gdeltproject.org/api/v2/doc/doc"
 
-_gdelt_lock = asyncio.Lock()
-_gdelt_last = 0.0
 
 
 def _dist_km(lat1, lon1, lat2, lon2) -> float:
@@ -60,7 +50,8 @@ async def natural_events(lat: float, lon: float, radius_km: float = 500, days: i
             continue
         nearest = min(geoms, key=lambda g: _dist_km(lat, lon, g["coordinates"][1], g["coordinates"][0]))
         out.append({
-            "title": e["title"],
+            # EONET titles end with an internal id ("Flood in Costa Rica 1104003"); drop it.
+            "title": re.sub(r"\s+\d{5,}$", "", e["title"]),
             "category": ", ".join(c["title"] for c in e.get("categories", [])),
             "date": geoms[-1]["date"][:10],
             "first_date": geoms[0]["date"][:10],
@@ -95,76 +86,3 @@ async def earthquakes(lat: float, lon: float, radius_km: float = 300, days: int 
         "url": f["properties"]["url"],
         "source": "USGS",
     } for f in feats]
-
-
-async def outbreaks(country: str | None, limit: int = 40) -> list[dict]:
-    async def fetch():
-        async with _client() as c:
-            r = await c.get(WHO, params={"$top": limit, "$orderby": "PublicationDate desc",
-                                         "$select": "Title,PublicationDate,ItemDefaultUrl,UrlName"})
-            r.raise_for_status()
-            return r.json().get("value", [])
-
-    items = await cached_json(f"who_don_{limit}", fetch, max_age_days=0.5)
-    out = []
-    for i in items:
-        title = i.get("Title") or ""
-        slug = i.get("ItemDefaultUrl") or i.get("UrlName") or ""
-        out.append({
-            "title": title,
-            "date": (i.get("PublicationDate") or "")[:10],
-            "url": f"https://www.who.int/emergencies/disease-outbreak-news/item{slug if slug.startswith('/') else '/' + slug}",
-            "matches_country": bool(country) and country.lower() in title.lower(),
-            "source": "WHO Disease Outbreak News",
-        })
-    # Newest first, with notices naming the country floated to the top.
-    out.sort(key=lambda i: i["date"], reverse=True)
-    out.sort(key=lambda i: not i["matches_country"])
-    return out
-
-
-ENV_TERMS = ("drought OR flood OR flooding OR wildfire OR heatwave OR \"heat wave\" OR deforestation OR pollution "
-             "OR hurricane OR cyclone OR landslide OR outbreak OR epidemic OR \"crop\" OR storm")
-
-
-async def news(place: str | None, country: str | None, days: int = 30) -> list[dict]:
-    """Recent environment-related headlines mentioning the place or country (GDELT allows ~1 request / 5 s)."""
-    names = [n for n in dict.fromkeys([place, country]) if n]
-    where = " OR ".join(f'"{n}"' for n in names)
-    query = f"({where}) ({ENV_TERMS})" if len(names) > 1 else f"{where} ({ENV_TERMS})"
-
-    async def fetch():
-        global _gdelt_last
-        async with _gdelt_lock:
-            wait = 5.5 - (time.monotonic() - _gdelt_last)
-            if wait > 0:
-                await asyncio.sleep(wait)
-            try:
-                async with _client() as c:
-                    for attempt in range(2):
-                        r = await c.get(GDELT, params={"query": query, "mode": "artlist", "format": "json",
-                                                       "maxrecords": 40, "timespan": f"{days}d", "sort": "datedesc"})
-                        body = r.text.strip()
-                        if r.status_code != 429:
-                            r.raise_for_status()
-                        if r.status_code == 200 and body.startswith("{"):
-                            return r.json().get("articles", [])
-                        if r.status_code == 200 and not body:
-                            return []  # GDELT answers an empty body when nothing matches
-                        await asyncio.sleep(6)  # plain-text reply = rate limited; retry once
-                    # Raising (not returning []) keeps the refusal out of the cache.
-                    raise ValueError("GDELT is limiting requests from this network right now; try again in a few minutes.")
-            finally:
-                _gdelt_last = time.monotonic()
-
-    arts = await cached_json(f"gdelt_{'_'.join(names).lower()}_{days}", fetch, max_age_days=0.25)
-    seen, out = set(), []
-    for a in arts:
-        t = (a.get("title") or "").strip()
-        if not t or t.lower() in seen:
-            continue
-        seen.add(t.lower())
-        sd = a.get("seendate") or ""
-        out.append({"title": t, "url": a.get("url"), "domain": a.get("domain"), "language": a.get("language"),
-                    "date": f"{sd[:4]}-{sd[4:6]}-{sd[6:8]}" if len(sd) >= 8 else None, "source": "GDELT"})
-    return out

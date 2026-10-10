@@ -6,7 +6,7 @@ import LayersPanel from './components/LayersPanel'
 import MapControls from './components/MapControls'
 import PlaceCard, { type CardTab, type ExportKind, type Options, type PlaceInfo, type Sheet } from './components/PlaceCard'
 import SearchBar, { type SearchPick } from './components/SearchBar'
-import type { TourStep } from './components/Tour'
+import Story, { type StoryControls } from './components/Story'
 import Icon from './components/Icon'
 import {
   buildReport, downloadReportHtml, exportChartImages, exportCsv, exportGeoJson, exportJson, exportPng, exportSavedPlaces,
@@ -27,9 +27,9 @@ const Globe = lazy(() => import('./components/Globe')) // CesiumJS, ~4 MB
 const StreetView = lazy(() => import('./components/StreetView')) // panorama viewer + three.js
 const ReportView = lazy(() => import('./components/ReportView'))
 const Licences = lazy(() => import('./components/Licences'))
-const Tour = lazy(() => import('./components/Tour'))
 import './panels.css'
 import './extras.css'
+import './story.css'
 
 const THIS_YEAR = new Date().getUTCFullYear()
 type Cursor = { lat: number; lon: number; heightM?: number } | null
@@ -61,7 +61,7 @@ export default function App() {
   const [cursorBus] = useState(() => createBus<Cursor>(null))
   const [viewBus] = useState(() => createBus<ViewState>({ heightM: 20_000_000, headingDeg: 0, pitchDeg: -90, centre: null }))
   const [sharpOn, setSharpOn] = useState(true)
-  const sharp = useSharpImagery(viewBus, sharpOn)
+  const sharp = useSharpImagery(viewBus, sharpOn, date)
   const [terrain, setTerrain] = useState(true)
   const [orbiting, setOrbiting] = useState(false)
   const [pegman, setPegman] = useState(false)
@@ -72,13 +72,41 @@ export default function App() {
   const [showLicences, setShowLicences] = useState(false)
   const [saved, setSaved] = useState<SavedPlace[]>(loadSaved)
   const [report, setReport] = useState<string | null>(null)
-  const [touring, setTouring] = useState(() => {
+  // Guided example: opened from the landing page (?story=santa-rosa) or the "Guided example" button.
+  // First-time visitors get a small, dismissible invitation instead of a blocking tour.
+  const [storyOn, setStoryOn] = useState(() => new URLSearchParams(location.search).get('story') === 'santa-rosa')
+  const [invite, setInvite] = useState(() => {
     try {
-      return !localStorage.getItem('earthos.tour.done') && !location.hash
+      return !storyOn && !location.hash && !localStorage.getItem('earthos.story.seen')
     } catch {
       return false
     }
   })
+  const dismissInvite = () => {
+    setInvite(false)
+    try {
+      localStorage.setItem('earthos.story.seen', '1')
+    } catch {
+      /* best effort */
+    }
+  }
+  // Weather and nearby events are optional context, off by default.
+  const [extras, setExtras] = useState(() => {
+    try {
+      return localStorage.getItem('earthos.extras') === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleExtras = (on: boolean) => {
+    setExtras(on)
+    if (!on && (tab === 'weather' || tab === 'news')) setTab('overview')
+    try {
+      localStorage.setItem('earthos.extras', on ? '1' : '0')
+    } catch {
+      /* best effort */
+    }
+  }
 
   useEffect(() => {
     if (!link) return
@@ -140,10 +168,8 @@ export default function App() {
   // Street-level photos near the pin; events/news only once the News tab is opened (GDELT is rate-limited).
   const pointKey = pLat != null && pLon != null ? `${pLat},${pLon}` : null
   const street = useFetch<StreetNearby>(pointKey, (s) => api.street(pLat!, pLon!, s))
-  const eventsKey = pointKey && tab === 'news' ? `${pointKey}|${place?.name}|${place?.country}` : null
-  const events = useFetch<EventsResult>(eventsKey, (s) => api.events({
-    lat: pLat!, lon: pLon!, place: place?.name ?? undefined, country: place?.country ?? undefined,
-  }, s))
+  const eventsKey = pointKey && extras && tab === 'news' ? pointKey : null
+  const events = useFetch<EventsResult>(eventsKey, (s) => api.events({ lat: pLat!, lon: pLon! }, s))
 
   // After a pegman drop, open the nearest photo as soon as the search returns.
   if (streetPending && !street.loading && pointKey) {
@@ -327,31 +353,31 @@ export default function App() {
     }
   }
 
-  const endTour = () => {
-    setTouring(false)
-    try {
-      localStorage.setItem('earthos.tour.done', '1')
-    } catch {
-      /* best effort */
-    }
-  }
-  const example = examples.find((e) => e.id === 'guanacaste') ?? examples[0]
-  const tourSteps: TourStep[] = [
-    { title: 'Welcome to EarthOS', body: 'Explore satellite, climate and terrain data for anywhere on Earth. This 1-minute tour shows the essentials. Use the arrow keys or the buttons to move through it.' },
-    { target: '.search-box', title: 'Search anywhere', body: 'Type a place name or coordinates (like "-3.1, -60.0") and press Enter. Press / at any time to jump here. Example and saved places appear when you click in.' },
-    { title: 'Move like Google Earth', body: 'Drag to pan, scroll or double-click to zoom, and Ctrl+drag to tilt. W A S D flies, Q/E rotates and R/F tilts. Click anywhere to drop a pin. When you zoom in close, EarthOS loads sharp 30 m imagery from the clearest recent satellite pass.' },
-    { target: '.controls', title: 'Map controls', body: 'From the top: shortcuts help, street-level photos (click it, then the globe), compass with rotate arrows, 2D/3D tilt, orbit, 3D terrain, your location and zoom.' },
-    { target: '.layers-btn', title: 'Layers', body: 'Switch map imagery and add data layers such as vegetation (NDVI), land temperature, rainfall, fires and labels. You can also turn sharp 30 m imagery on or off here.' },
-    { target: '.datebar', title: 'Time travel', body: 'Step through dates, or press Compare to swipe between two dates side by side.' },
-    {
-      target: '.card', title: 'Place card', body: 'Dropping a pin opens a card. Here is an example place. Overview shows today\'s readings and the terrain, and the other tabs hold charts, anomalies, street photos, the weather forecast and nearby news.',
-      enter: () => { if (example && !place) onSearch({ kind: 'place', place: example }) },
+  const storyControls: StoryControls = {
+    openPlace: () => {
+      if (!place || Math.abs(place.lat - 10.84) > 1e-3 || Math.abs(place.lon + 85.62) > 1e-3) {
+        openPlace(10.84, -85.62, 'Santa Rosa, Guanacaste', 'Tropical dry forest · Costa Rica', 1, 'Costa Rica')
+      }
+      const fly = setInterval(() => {
+        if (!globe.current) return
+        clearInterval(fly)
+        globe.current.flyTo(10.84, -85.62, 22_000, -40)
+      }, 250)
     },
-    { target: '.card-tabs', title: 'Six tabs of data', body: 'Charts has 11 graphs: vegetation, temperature, rain, sunlight, humidity, soil moisture, wind, fire and land cover. Anomalies flags unusual periods. Everything is measured data, with no guesses about causes.' },
-    { target: '.actions', title: 'Save, share and download', body: 'Star a place to save it, copy a link that reopens this exact view, or download the data as CSV, JSON, GeoJSON, map and chart images, or a printable PDF report.' },
-    { target: '.tour-btn', title: 'Replay any time', body: 'Press Tutorial to see this tour again. Enjoy exploring!' },
-  ]
-
+    showTab: (t) => {
+      setTab(t)
+      setSheet('half')
+    },
+    focusEvent: (start) => {
+      const i = series?.stats?.events.findIndex((e) => e.start === start) ?? -1
+      if (i >= 0) setFocusIndex(i)
+    },
+    compareEvent: (ev) => {
+      showEvent(ev)
+      setSheet('peek')
+    },
+    endCompare: () => setCompare((c) => ({ ...c, on: false })),
+  }
 
   return (
     <div className={`app ${place ? `with-card sheet-${sheet}` : ''} ${pegman ? 'pegman-mode' : ''}`}>
@@ -377,7 +403,7 @@ export default function App() {
           onOpenStreet={setStreetOpen}
           onFly={(lat, lon) => globe.current?.flyTo(lat, lon, 120_000, -45)}
           saved={isSaved} onToggleSave={toggleSave} onShare={share} onExport={onExport}
-          sheet={sheet} onSheet={setSheet}
+          sheet={sheet} onSheet={setSheet} extras={extras}
           onClose={() => setPlace(null)}
         />
       )}
@@ -393,9 +419,9 @@ export default function App() {
       {streetPending && <div className="toast" role="status">Looking for street-level photos…</div>}
       {notice && <div className="toast" role="status">{notice}</div>}
 
-      {sharpOn && <SharpChip view={viewBus} pass={sharp.pass} passes={sharp.passes} loading={sharp.loading} onChoose={sharp.choose} />}
+      {sharpOn && <SharpChip view={viewBus} date={date} pass={sharp.pass} passes={sharp.passes} loading={sharp.loading} onChoose={sharp.choose} />}
 
-      <LayersPanel base={base} overlays={overlays} opacity={opacity} sharp={sharpOn} onSharp={setSharpOn} onBase={setBase} onOpacity={setOpacity}
+      <LayersPanel base={base} overlays={overlays} opacity={opacity} sharp={sharpOn} onSharp={setSharpOn} extras={extras} onExtras={toggleExtras} onBase={setBase} onOpacity={setOpacity}
         onToggle={(id) => setOverlays((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]))} />
 
       <DateBar date={date} onDate={setDate} compare={compare} onCompare={setCompare}
@@ -413,9 +439,18 @@ export default function App() {
 
       <StatusBar cursor={cursorBus} view={viewBus} terrain={terrain} onLicences={() => setShowLicences(true)} />
 
-      <button className="tour-btn" onClick={() => setTouring(true)} title="Show the guided tour" aria-label="Tutorial">
-        <Icon name="school" size={18} /> Tutorial
+      <button className="tour-btn" onClick={() => { dismissInvite(); setStoryOn(true) }} title="Follow a guided example" aria-label="Guided example">
+        <Icon name="school" size={18} /> Guided example
       </button>
+
+      {invite && !storyOn && (
+        <div className="invite" role="note">
+          <span>New here? See how EarthOS spotted Santa Rosa's late rainy season in 2026.</span>
+          <button className="btn primary" onClick={() => { dismissInvite(); setStoryOn(true) }}>Show me</button>
+          <button className="icon-btn" onClick={dismissInvite} aria-label="Dismiss">✕</button>
+        </div>
+      )}
+      {storyOn && <Story series={series} loading={loading} controls={storyControls} onClose={() => setStoryOn(false)} />}
 
       <Suspense fallback={null}>
         {streetOpen && street.data && (
@@ -423,7 +458,6 @@ export default function App() {
             onChange={setStreetOpen} onClose={() => setStreetOpen(null)} />
         )}
         {showLicences && <Licences onClose={() => setShowLicences(false)} />}
-        {touring && <Tour steps={tourSteps} onClose={endTour} />}
         {report && place && (
           <ReportView html={report} onDownload={() => downloadReportHtml(place, report)} onClose={() => setReport(null)} />
         )}

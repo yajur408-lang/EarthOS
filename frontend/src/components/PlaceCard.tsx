@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type AnomalyEvent, type EventsResult, type Series, type StreetImage, type StreetNearby } from '../api'
+import { api, type AnomalyEvent, type ExplainResult, type EventsResult, type Series, type StreetImage, type StreetNearby } from '../api'
 import { fmt, fmtLatLon, prettyDate } from '../util'
 import Icon from './Icon'
+import { useFetch } from '../useFetch'
 import { NewsPanel, Stat, TerrainSection, WeatherPanel } from './Panels'
 
 const Dashboard = lazy(() => import('./Dashboard'))
@@ -29,8 +30,9 @@ const TABS: { id: CardTab; label: string }[] = [
   { id: 'charts', label: 'Charts' },
   { id: 'anomalies', label: 'Anomalies' },
   { id: 'street', label: 'Street' },
+  // Optional context, hidden unless "Show weather & nearby events" is on in Layers.
   { id: 'weather', label: 'Weather' },
-  { id: 'news', label: 'News' },
+  { id: 'news', label: 'Events' },
 ]
 
 interface Fetched<T> {
@@ -66,6 +68,8 @@ interface Props {
   onShare: () => Promise<boolean>
   onExport: (kind: ExportKind) => Promise<void>
   onClose: () => void
+  /** Show the optional weather and nearby-events tabs. */
+  extras: boolean
   /** Phone layout: how far the bottom sheet is pulled up. */
   sheet: Sheet
   onSheet: (s: Sheet) => void
@@ -184,7 +188,7 @@ export default function PlaceCard(props: Props) {
       </div>
 
       <nav className="card-tabs" role="tablist">
-        {TABS.map((t) => (
+        {TABS.filter((t) => props.extras || (t.id !== 'weather' && t.id !== 'news')).map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => { onTab(t.id); if (props.sheet === 'peek') props.onSheet('half') }}>
             {t.label}
             {t.id === 'anomalies' && stats ? <em>{stats.events.length}</em> : null}
@@ -224,7 +228,7 @@ export default function PlaceCard(props: Props) {
                 <div className="stats">
                   <Stat label="NDVI" value={near.ndvi?.ndvi?.toFixed(3) ?? '–'}
                     sub={near.ndvi ? `composite ${near.ndvi.date} · median ${fmt(near.ndvi.ndvi_expected, 3, false)}` : undefined} />
-                  <Stat label="NDVI z-score" value={fmt(near.ndvi?.ndvi_z, 1)} sub="vs same period in other years" />
+                  <Stat label="vs normal for the season" value={fmtZ(near.ndvi?.ndvi_z)} sub="z-score; the same weeks in other years" />
                   <Stat label="Rain" value={near.climate?.precip_mm != null ? `${near.climate.precip_mm} mm` : '–'} sub={near.climate?.date} />
                   <Stat label="Air temperature" value={near.climate?.tmax_c != null ? `${near.climate.tmin_c ?? '–'} – ${near.climate.tmax_c} °C` : '–'} sub="daily min – max" />
                   <Stat label="Humidity" value={near.climate?.humidity_pct != null ? `${Math.round(near.climate.humidity_pct)}%` : '–'} />
@@ -266,21 +270,26 @@ export default function PlaceCard(props: Props) {
 
         {tab === 'anomalies' && series && stats && (
           <>
-            <div className="stats">
-              <Stat label="Threshold flags" value={stats.methods.threshold_flags} tone="amber" sub={`NDVI drop ≥ ${series.query.drop}`} />
-              <Stat label="Below-normal flags" value={stats.methods.seasonal_below_flags} tone="red" sub={`z ≤ −${series.query.z}`} />
-              <Stat label="Above-normal flags" value={stats.methods.seasonal_above_flags} tone="blue" sub={`z ≥ ${series.query.z}`} />
-              <Stat label="Flagged by both methods" value={stats.methods.both} sub={`of ${stats.methods.composites_evaluated} composites`} />
-              <Stat label="Threshold flags within ±1.5σ" value={stats.methods.threshold_flags_within_1_5_sigma} />
-              <Stat label="Seasonal only / threshold only" value={`${stats.methods.seasonal_only} / ${stats.methods.threshold_only}`} />
-            </div>
-            <h3>Events <small>largest |z| first</small></h3>
-            {stats.events.length === 0 && <p className="empty">No composites beyond ±{series.query.z}σ in this period.</p>}
+            <h3>Unusual periods <small>most trustworthy first</small></h3>
+            {stats.events.length === 0 && (
+              <p className="empty">Nothing outside the normal range for the season in this period (|z| ≥ {series.query.z} and at least {stats.params.min_deviation} NDVI).</p>
+            )}
             {stats.events.map((ev, i) => (
-              <EventCard key={ev.direction + ev.start} ev={ev} open={focus === i}
+              <EventCard key={ev.direction + ev.start} ev={ev} open={focus === i} query={series.query}
                 onToggle={() => onFocus(focus === i ? null : i)} onShow={() => onShowEvent(ev)}
                 onChart={() => { onFocus(i); onTab('charts') }} antecedent={stats.params.antecedent_days} />
             ))}
+            <details className="method">
+              <summary>Compare with a simple threshold alarm</summary>
+              <div className="stats">
+                <Stat label="Seasonal flags (EarthOS)" value={stats.methods.seasonal_below_flags + stats.methods.seasonal_above_flags} tone="blue"
+                  sub={`of ${stats.methods.composites_evaluated} trusted composites`} />
+                <Stat label="Threshold alarms" value={stats.methods.threshold_flags} tone="amber" sub={`any NDVI drop ≥ ${series.query.drop}`} />
+                <Stat label="Threshold alarms inside the normal range" value={stats.methods.threshold_flags_within_1_5_sigma}
+                  sub="ordinary seasonal browning a simple alarm would report" />
+                <Stat label="Composites excluded for cloud" value={stats.methods.composites_excluded_quality} sub="shown faintly on charts, never flagged" />
+              </div>
+            </details>
             <OptionsForm {...props} />
             <details className="method">
               <summary>How these numbers are calculated</summary>
@@ -293,7 +302,7 @@ export default function PlaceCard(props: Props) {
         {tab === 'weather' && <WeatherPanel lat={place.lat} lon={place.lon} />}
         {tab === 'news' && (
           <NewsPanel data={props.events.data} loading={props.events.loading} error={props.events.error}
-            retry={props.events.retry} country={place.country} onFly={props.onFly} />
+            retry={props.events.retry} onFly={props.onFly} />
         )}
       </div>
     </aside>
@@ -382,14 +391,31 @@ function OptionsForm({ place, options, thisYear, loading, onOptions }: Props) {
   )
 }
 
-function EventCard({ ev, open, onToggle, onShow, onChart, antecedent }: {
+/** z-scores beyond ±4 aren't meaningful as exact numbers; say "beyond 4σ" instead. */
+function fmtZ(z: number | null | undefined) {
+  if (z == null) return '–'
+  if (Math.abs(z) > 4) return z < 0 ? 'beyond −4σ' : 'beyond +4σ'
+  return `${z >= 0 ? '+' : '−'}${Math.abs(z).toFixed(1)}σ`
+}
+
+const LEVEL_LABEL = { supported: 'Supported', possible: 'Possible', 'not supported': 'Not supported' } as const
+
+function EventCard({ ev, open, query, onToggle, onShow, onChart, antecedent }: {
   ev: AnomalyEvent
   open: boolean
+  query: Series['query']
   onToggle: () => void
   onShow: () => void
   onChart: () => void
   antecedent: number
 }) {
+  // When opened, re-check the event with burned-area and land-cover data (slower datasets, fetched on demand).
+  const key = open ? `${query.lat},${query.lon},${query.km},${query.start_year},${query.end_year},${ev.start},${ev.direction}` : null
+  const extra = useFetch<ExplainResult>(key, (s) => api.explain({
+    lat: query.lat, lon: query.lon, km: query.km, start_year: query.start_year, end_year: query.end_year,
+    event_start: ev.start, direction: ev.direction,
+  }, s))
+  const x = extra.data?.event.explanation ?? ev.explanation
   const after = ev.within_1sigma_within_3_composites
   return (
     <article className={`event ${open ? 'open' : ''}`}>
@@ -397,25 +423,56 @@ function EventCard({ ev, open, onToggle, onShow, onChart, antecedent }: {
         <span className={`dot ${ev.direction}`} aria-hidden />
         <div>
           <strong>{prettyDate(ev.start)}{ev.end !== ev.start ? ` – ${prettyDate(ev.end)}` : ''}</strong>
-          <span>{ev.direction === 'below' ? 'Below' : 'Above'} normal · {ev.composites} composite{ev.composites > 1 ? 's' : ''} · peak z {fmt(ev.peak_z, 1)}</span>
+          <span>
+            {ev.direction === 'below' ? 'Below' : 'Above'} normal · NDVI {fmt(ev.mean_difference, 2)} · {fmtZ(ev.peak_z)}
+          </span>
         </div>
+        <em className={`conf ${ev.explanation.confidence}`}>{ev.explanation.confidence} confidence</em>
       </button>
       {open && (
         <div className="event-body">
-          <dl className="facts">
-            <dt>Mean NDVI</dt>
-            <dd>{ev.mean_ndvi.toFixed(3)} (median {ev.mean_expected.toFixed(3)}, difference {fmt(ev.mean_difference, 3)})</dd>
-            <dt>Usable pixels</dt><dd>{Math.round(ev.usable_fraction * 100)}% on average</dd>
-            <dt>Rainfall</dt>
-            <dd>
-              {ev.precip_pct_vs_median != null ? `${fmt(ev.precip_pct_vs_median, 0)}% vs median` : '–'}
-              {ev.precip_z != null ? ` (z ${fmt(ev.precip_z, 1)})` : ''}; window includes {antecedent} prior days
-            </dd>
-            <dt>Max temp</dt><dd>{ev.tmax_z != null ? `z ${fmt(ev.tmax_z, 1)} vs same period in other years` : '–'}</dd>
-            <dt>Within ±1σ after</dt>
-            <dd>{after == null ? 'no later data' : after ? 'yes, within 3 composites' : 'no, not within 3 composites'}</dd>
-            <dt>Threshold flags</dt><dd>{ev.threshold_flags_in_event} of {ev.composites}</dd>
-          </dl>
+          <p className="summary">{x.summary}</p>
+
+          <h4>Is it real? <small>data-quality checks</small></h4>
+          <ul className="checks">
+            {ev.checks.map((c) => (
+              <li key={c.check} className={c.status}>
+                <span aria-hidden>{c.status === 'pass' ? '✓' : c.status === 'warn' ? '!' : '✕'}</span>
+                <div><b>{c.check}</b> {c.detail}</div>
+              </li>
+            ))}
+          </ul>
+
+          <h4>What could explain it? <small>{extra.loading ? 'checking fire and land-cover data…' : 'evidence from independent data'}</small></h4>
+          <ul className="drivers">
+            {x.drivers.map((d) => (
+              <li key={d.id} className={d.level.replace(' ', '-')}>
+                <div className="driver-head"><b>{d.title}</b><em>{LEVEL_LABEL[d.level]}</em></div>
+                {d.for.length > 0 && <p><span>For:</span> {d.for.join('; ')}</p>}
+                {d.against.length > 0 && <p><span>Against:</span> {d.against.join('; ')}</p>}
+                <small>{d.sources.join(' · ')}</small>
+              </li>
+            ))}
+          </ul>
+          {extra.data?.notes.map((n) => <p key={n} className="hint">{n}</p>)}
+          <p className="hint caveat">{x.caveat}</p>
+
+          <details className="method">
+            <summary>The numbers</summary>
+            <dl className="facts">
+              <dt>Mean NDVI</dt>
+              <dd>{ev.mean_ndvi.toFixed(3)} (normal {ev.mean_expected.toFixed(3)}, difference {fmt(ev.mean_difference, 3)})</dd>
+              <dt>Good pixels</dt><dd>{Math.round(ev.good_fraction * 100)}% rated good by MODIS QA</dd>
+              <dt>Rainfall</dt>
+              <dd>
+                {ev.precip_pct_vs_median != null ? `${fmt(ev.precip_pct_vs_median, 0)}% vs usual` : '–'}
+                {ev.prior_precip_pct != null ? `; month before ${fmt(ev.prior_precip_pct, 0)}%` : ''} (window includes {antecedent} prior days)
+              </dd>
+              <dt>Max temp</dt><dd>{ev.tmax_z != null ? `${fmtZ(ev.tmax_z)} vs the same weeks in other years` : '–'}</dd>
+              <dt>Back to normal</dt>
+              <dd>{after == null ? 'no later data' : after ? 'yes, within 3 composites' : 'no, not within 3 composites'}</dd>
+            </dl>
+          </details>
           <div className="row">
             <button className="btn" onClick={onShow}><Icon name="compare" size={18} /> Compare on map</button>
             <button className="btn" onClick={onChart}>Show on charts</button>

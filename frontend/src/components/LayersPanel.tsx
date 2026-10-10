@@ -9,6 +9,8 @@ interface Props {
   opacity: number
   sharp: boolean
   onSharp: (on: boolean) => void
+  extras: boolean
+  onExtras: (on: boolean) => void
   onBase: (id: string) => void
   onToggle: (id: string) => void
   onOpacity: (v: number) => void
@@ -16,7 +18,7 @@ interface Props {
 
 const THUMB_DATE = isoDaysAgo(20) // recent enough for every timed layer to have data
 
-export default function LayersPanel({ base, overlays, opacity, sharp, onSharp, onBase, onToggle, onOpacity }: Props) {
+export default function LayersPanel({ base, overlays, opacity, sharp, onSharp, extras, onExtras, onBase, onToggle, onOpacity }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const baseLayer = LAYERS.find((l) => l.id === base)!
@@ -61,6 +63,10 @@ export default function LayersPanel({ base, overlays, opacity, sharp, onSharp, o
               </button>
             ))}
           </div>
+          <label className="sharp-toggle">
+            <input type="checkbox" checked={extras} onChange={(e) => onExtras(e.target.checked)} />
+            <span><b>Show weather and nearby events</b><small>Adds Weather and Events tabs to the place card (optional context)</small></span>
+          </label>
           <label className="opacity">
             <span>Data layer opacity</span>
             <input type="range" min={0.2} max={1} step={0.05} value={opacity} onChange={(e) => onOpacity(+e.target.value)} />
