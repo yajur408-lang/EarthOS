@@ -37,18 +37,21 @@ The interface works like Google Maps and Google Earth:
 Requirements: Node 20+, Python 3.11+.
 
 ```bash
-# backend (terminal 1)
+# one-time setup
 cd backend
 python -m venv .venv
-.venv\Scripts\activate          # macOS/Linux: source .venv/bin/activate
+.venv\Scriptsctivate          # macOS/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
-uvicorn app.main:app --reload --port 8000
-
-# frontend (terminal 2)
-cd frontend
+cd ../frontend
 npm install
-npm run dev                      # http://localhost:5173  (proxies /api -> :8000)
+
+# run everything (website + API) with one command
+npm run dev                      # http://localhost:5173
 ```
+
+`npm run dev` starts the FastAPI backend on port 8000 automatically and restarts it when you edit
+backend code. If a backend is already running on :8000 it reuses that one. Set `BACKEND_AUTOSTART=0`
+to manage the backend yourself (`uvicorn app.main:app --port 8000` from `backend/`).
 
 The first request for a new location downloads every MODIS composite for those years from ORNL DAAC
 (about 10–20 s per year). After that it is cached in `backend/data/cache/`. No API keys are needed.

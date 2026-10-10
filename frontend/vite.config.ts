@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import { backendDevServer } from './dev/backend.ts'
 
 // CesiumJS ships Web Workers, widgets CSS and assets that must be served as static files.
 // See https://cesium.com/learn/cesiumjs-learn/cesiumjs-quickstart/ (Vite section).
@@ -13,6 +14,8 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // `npm run dev` also starts (and auto-restarts) the FastAPI backend.
+    backendDevServer(),
     viteStaticCopy({
       // Directory structure is preserved, so strip "node_modules/cesium/Build/Cesium".
       targets: ['ThirdParty', 'Workers', 'Assets', 'Widgets'].map((dir) => ({
