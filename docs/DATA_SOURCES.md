@@ -27,8 +27,6 @@ The in-app panel (`frontend/src/licences.ts`) mirrors this file.
 | MET Norway Locationforecast 2.0 | Forecast | CC BY 4.0 | Yes; identify with User-Agent, cache, don't overload | MET Norway, CC BY 4.0 |
 | NASA EONET v3 | Natural events | NASA open data | Yes | NASA EONET |
 | USGS earthquake catalogue | Earthquakes | US public domain | Yes | USGS |
-| WHO Disease Outbreak News | Outbreak notices | WHO content is copyrighted | Titles + links only (no text reproduced) | Link to who.int |
-| GDELT DOC 2.0 | News headlines | Free for any use with citation | Yes; ~1 request / 5 s, cached | The GDELT Project; headlines link to publishers |
 | NASA HLS v2.0 true colour (GIBS `HLS_S30/L30_Nadir_BRDF_Adjusted_Reflectance`) + NASA CMR granule search | Sharp 30 m imagery when zoomed in; CMR cloud-cover metadata picks the clearest recent pass | NASA open data; Sentinel-2 part also Copernicus terms | Yes, with attribution | NASA HLS v2.0 via NASA GIBS; "Contains modified Copernicus Sentinel data [year]" |
 | NASA POWER daily point API | Daily rain (PRECTOTCORR) and Tmax (T2M_MAX) charts and CSV | NASA open data | Yes | "Data obtained from the NASA Langley Research Center (LaRC) POWER Project funded through the NASA Earth Science/Applied Science Program." |
 

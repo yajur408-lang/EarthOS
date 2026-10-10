@@ -102,6 +102,16 @@ export default function Dashboard({ series, km, focus, cursorDate, onDate }: Pro
       { x, y: band(-1), type: 'scatter', mode: 'lines', line: { width: 0 }, fill: 'tonexty', fillcolor: 'rgba(95,99,104,0.15)', name: 'Normal ±2σ', hoverinfo: 'skip' },
       { x, y: st.map((p) => p.ndvi_expected), type: 'scatter', mode: 'lines', name: 'Seasonal median', line: { color: '#80868b', width: 1, dash: 'dot' } },
       { x: series.ndvi.points.map((p) => p.date), y: series.ndvi.points.map((p) => p.ndvi), type: 'scatter', mode: 'lines', name: 'NDVI', line: { color: '#188038', width: 1.6 } },
+      (() => {
+        // Composites too cloudy to trust: shown for honesty, never used for the normal range or flags.
+        const pts = st.filter((p) => p.trusted === false && p.ndvi_raw != null)
+        return {
+          x: pts.map((p) => p.date), y: pts.map((p) => p.ndvi_raw), type: 'scatter', mode: 'markers', name: 'Cloudy (excluded)',
+          marker: { color: 'rgba(128,134,139,0.45)', size: 5 },
+          customdata: pts.map((p) => Math.round(100 * (p.good_fraction ?? 0))),
+          hovertemplate: '%{x}: %{y:.2f} (only %{customdata}% clear pixels, excluded)<extra></extra>',
+        } as Plotly.Data
+      })(),
       flags((p) => p.flag_below, 'Below normal', { color: '#d93025', size: 7, line: { color: '#fff', width: 1 } }),
       flags((p) => p.flag_above, 'Above normal', { color: '#1a73e8', size: 7, line: { color: '#fff', width: 1 } }),
       flags((p) => p.flag_threshold, 'Threshold flag', { symbol: 'x-thin', size: 9, line: { color: '#f9ab00', width: 2 } }),

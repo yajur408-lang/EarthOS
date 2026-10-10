@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type GeoResult, type Place } from '../api'
 import type { SavedPlace } from '../exporters'
+import { linkProps } from '../router'
 import { fmtLatLon, parseLatLon } from '../util'
 import Icon from './Icon'
 
@@ -99,9 +100,9 @@ export default function SearchBar({ examples, saved, onExportSaved, title, onPic
           submit()
         }}
       >
-        <span className="brand-mark" aria-hidden>
+        <a className="brand-mark" {...linkProps('/')} title="EarthOS home" aria-label="EarthOS home">
           <Icon name="globe" size={22} />
-        </span>
+        </a>
         <input
           ref={inputRef}
           value={text}

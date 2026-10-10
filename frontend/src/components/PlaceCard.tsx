@@ -427,15 +427,15 @@ function EventCard({ ev, open, query, onToggle, onShow, onChart, antecedent }: {
             {ev.direction === 'below' ? 'Below' : 'Above'} normal · NDVI {fmt(ev.mean_difference, 2)} · {fmtZ(ev.peak_z)}
           </span>
         </div>
-        <em className={`conf ${ev.explanation.confidence}`}>{ev.explanation.confidence} confidence</em>
+        {x && <em className={`conf ${x.confidence}`}>{x.confidence} confidence</em>}
       </button>
       {open && (
         <div className="event-body">
-          <p className="summary">{x.summary}</p>
+          {x && <p className="summary">{x.summary}</p>}
 
           <h4>Is it real? <small>data-quality checks</small></h4>
           <ul className="checks">
-            {ev.checks.map((c) => (
+            {(ev.checks ?? []).map((c) => (
               <li key={c.check} className={c.status}>
                 <span aria-hidden>{c.status === 'pass' ? '✓' : c.status === 'warn' ? '!' : '✕'}</span>
                 <div><b>{c.check}</b> {c.detail}</div>
@@ -445,7 +445,7 @@ function EventCard({ ev, open, query, onToggle, onShow, onChart, antecedent }: {
 
           <h4>What could explain it? <small>{extra.loading ? 'checking fire and land-cover data…' : 'evidence from independent data'}</small></h4>
           <ul className="drivers">
-            {x.drivers.map((d) => (
+            {(x?.drivers ?? []).map((d) => (
               <li key={d.id} className={d.level.replace(' ', '-')}>
                 <div className="driver-head"><b>{d.title}</b><em>{LEVEL_LABEL[d.level]}</em></div>
                 {d.for.length > 0 && <p><span>For:</span> {d.for.join('; ')}</p>}
@@ -455,14 +455,14 @@ function EventCard({ ev, open, query, onToggle, onShow, onChart, antecedent }: {
             ))}
           </ul>
           {extra.data?.notes.map((n) => <p key={n} className="hint">{n}</p>)}
-          <p className="hint caveat">{x.caveat}</p>
+          {x && <p className="hint caveat">{x.caveat}</p>}
 
           <details className="method">
             <summary>The numbers</summary>
             <dl className="facts">
               <dt>Mean NDVI</dt>
               <dd>{ev.mean_ndvi.toFixed(3)} (normal {ev.mean_expected.toFixed(3)}, difference {fmt(ev.mean_difference, 3)})</dd>
-              <dt>Good pixels</dt><dd>{Math.round(ev.good_fraction * 100)}% rated good by MODIS QA</dd>
+              <dt>Good pixels</dt><dd>{Math.round((ev.good_fraction ?? 0) * 100)}% rated good by MODIS QA</dd>
               <dt>Rainfall</dt>
               <dd>
                 {ev.precip_pct_vs_median != null ? `${fmt(ev.precip_pct_vs_median, 0)}% vs usual` : '–'}

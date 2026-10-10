@@ -1,36 +1,29 @@
 # EarthOS
 
-**A 3D globe for exploring satellite and climate data anywhere on Earth, with seasonal anomaly statistics.**
-EarthOS measures and flags. It does not interpret: it never attributes a cause or tells you what a change means.
+**A 3D globe for finding unusual vegetation changes anywhere on Earth, with quality-controlled statistics and the evidence behind each one.**
+
+Pages: `/` (landing, with the Santa Rosa 2026 example), `/explore` (the globe), `/methods` (how every number is computed) and `/about`.
 
 The interface works like Google Maps and Google Earth:
 - **Search** (press `/`) for a place name or coordinates such as `-3.1, -60.0` or `9.9N 84.1W`.
 - **Click anywhere** to drop a pin. A place card opens with an Overview, Charts and Anomalies.
 - **Layers** (bottom-left) shows map types and data layers as thumbnails. The **date bar** (bottom) steps through days and has a split-screen Compare mode.
-- **Controls** (bottom-right): help, street-level figure, compass with rotate arrows, 3D tilt, orbit, 3D terrain, my location, and zoom.
-- **Google Earth-style movement**: real 3D terrain, tilted fly-to, double-click zoom, Ctrl/middle-drag tilt, and keyboard flying (W A S D / arrows; Q/E rotate; R/F tilt; +/- zoom).
-- **Street level**: open CC BY-SA photos and 360° panoramas from KartaView (plus Mapillary with a free token), with forward/back along the route and an "other dates" strip to compare years.
-- **Sharp imagery**: zoom in and EarthOS layers NASA HLS 30 m Landsat/Sentinel-2 imagery from the clearest recent pass. NASA's catalogue cloud cover picks the pass, and the chip at the top lets you choose another date. It also renders at full device pixel density.
-- **Tutorial**: a guided tour runs on first visit; press **Tutorial** (top-right) to replay it.
-- **Save and share**: star places (they appear under "Saved places" in search, downloadable as GeoJSON), copy a link that reopens the exact view, and download CSV, a full JSON bundle, GeoJSON, map and chart PNGs, or a printable PDF report.
-- **Place card tabs**: Overview (readings, terrain and elevation profile), Charts (12 charts covering vegetation, temperature, rain, sunlight, humidity, soil moisture, wind, fire and land cover), Anomalies, Street, Weather (MET Norway forecast) and News (nearby natural events, earthquakes, WHO outbreak notices, and environment headlines via GDELT). News and events are listed as published, not interpreted.
+- **Google Earth-style movement**: 3D terrain, tilted fly-to, double-click zoom, Ctrl/middle-drag tilt, and keyboard flying (W A S D / arrows; Q/E rotate; R/F tilt; +/- zoom).
+- **Street level**: open CC BY-SA photos and 360° panoramas from KartaView (plus Mapillary with a free token).
+- **Sharp imagery**: zoomed in, EarthOS layers NASA HLS 30 m Landsat/Sentinel-2 imagery from the clearest pass near the date-bar date, and says how many days off it is.
+- **Guided example**: a six-step walk-through of the 2026 late rainy season at Santa Rosa, Guanacaste (`/explore?story=santa-rosa`).
+- **Save and share**: star places, copy a link that reopens the exact view, and download CSV, JSON, GeoJSON, PNG or a printable PDF report.
+- **Optional context**: weather (MET Norway) and nearby natural events and earthquakes (NASA EONET, USGS) are off by default; switch them on in Layers.
 
-| Part | What it shows |
-|---|---|
-| **Map layers** | A CesiumJS globe with NASA GIBS imagery: MODIS/VIIRS true colour, NDVI, EVI, land-surface temperature, IMERG rain, VIIRS fires, plus OSM labels and coastlines. Includes a date picker and a split-screen comparison of two dates. |
-| **Location data** | Any land point (click the globe, type coordinates, or use an example place). Charts MODIS NDVI (250 m, 16-day) with its seasonal normal range, NASA POWER rain and max temperature, raw readings at the chosen date, NDVI statistics at compare dates A and B, and a CSV export with citations. |
-| **Anomalies** | Two detectors side by side: a threshold detector (NDVI drop ≥ 0.10) and a seasonal detector (\|z\| ≥ 2 against the same 16-day period in other years). Shows a method-comparison table and below/above-normal events described only by statistics: NDVI vs seasonal median, z-score, usable pixels, rainfall and temperature versus their seasonal norms, and whether NDVI returned within ±1σ. Both thresholds are adjustable. |
+## How anomalies are found and explained
 
-## Research question
+- **Quality control:** each MOD13Q1 composite is trusted only if ≥ 30% of its pixels are rated "good", or ≥ 80% are usable and ≤ 5% cloudy. Untrusted composites are drawn faintly but never used.
+- **Normal range:** leave-one-year-out median of the same and neighbouring 16-day slots, σ = 1.4826 × MAD (floor 0.03); normal = median ± 2σ.
+- **Flags:** |z| ≥ 2 **and** an NDVI difference of at least 0.05.
+- **Validation:** every event gets five checks (clear pixels, persistence, size of change, cloudy neighbours, baseline depth) and a confidence level.
+- **Explanation:** `/api/explain` weighs possible drivers (drought, late/early green-up, heat, fire from MCD64A1, land-cover change from MCD12Q1, data artifact) as supported / possible / not supported. Wording is "most consistent with", never "caused by".
 
-> Can seasonal anomaly detection combined with multiple environmental data sources identify unusual
-> vegetation changes more reliably than simple threshold-based methods?
-
-- **Seasonal median:** median NDVI of the same 16-day slot in all *other* years (leave-one-year-out), with σ = 1.4826 × MAD.
-- **Normal range:** median ± 2σ.
-- **Quality filter:** composites with < 20% usable pixels (by the product's own reliability flags) are left out of the statistics.
-- **Rainfall window:** each composite window plus the 32 days before it, compared with the same windows in other years.
-- **Evaluating accuracy** needs labelled events (e.g. Hansen loss years, FIRMS fires). The app reports agreement counts only.
+See the Methods page for details and limitations.
 
 ## Run it locally
 
@@ -40,7 +33,7 @@ Requirements: Node 20+, Python 3.11+.
 # one-time setup
 cd backend
 python -m venv .venv
-.venv\Scriptsctivate          # macOS/Linux: source .venv/bin/activate
+.venv\Scripts\activate          # macOS/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
 cd ../frontend
 npm install
@@ -71,8 +64,11 @@ and no CORS setup. Any Docker host works. The steps below use **Render** (free t
 4. Deploy. The site appears at `https://earthos-xxxx.onrender.com`. Pushing to the repository redeploys automatically.
 
 Notes:
-- The free tier sleeps after ~15 minutes idle; the first visit afterwards takes about a minute to wake up.
-- The cache (`CACHE_DIR`) is temporary on free hosts, so the first look at each place re-downloads its satellite record.
+- The free tier sleeps after ~15 minutes idle; the first visit afterwards takes about a minute to wake up (a loading screen
+  says so). Set `KEEP_WARM_URL` to the site's own URL and it pings itself every 10 minutes to stay awake.
+- The Costa Rica featured places ship pre-computed in `backend/seed` (copied into the cache at startup), so they open
+  instantly. Refresh it with `python -m scripts.build_seed` from `backend/`.
+- The cache (`CACHE_DIR`) is temporary on free hosts, so the first look at other places re-downloads their satellite record.
 - Each visitor is rate-limited (`RATE_LIMIT_PER_MINUTE`, default 240 "points"; heavy endpoints cost more) so one user
   can't get the server blocked by the free public data services.
 - Other hosts: `docker build -t earthos . && docker run -p 8000:8000 -e NOMINATIM_CONTACT=you@example.com earthos`

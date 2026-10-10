@@ -48,6 +48,6 @@
   /* Date bar: full width, wraps instead of overflowing; controls sit above it. */
   .datebar-wrap, .with-card .datebar-wrap { left: 8px; right: 8px; transform: none; max-width: none; bottom: 36px; }
   .datebar { flex-wrap: wrap; height: auto; min-height: 44px; justify-content: center; padding: 4px 6px; border-radius: 22px; }
-  .layers, .controls { bottom: 96px; }
+  .layers, .controls { bottom: 132px; }
   .sheet-peek .layers, .sheet-peek .controls { bottom: 216px; }
 }

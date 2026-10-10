@@ -19,6 +19,7 @@ SEED = BACKEND / "seed"
 TMP = BACKEND / "data" / "seed-build"
 os.environ["CACHE_DIR"] = str(TMP)  # must be set before the app modules import config
 os.environ["SEED_DIR"] = str(BACKEND / "no-seed")  # don't copy the old seed into the build cache
+os.environ["PREWARM_PLACES"] = ""  # the script fetches the places itself
 sys.path.insert(0, str(BACKEND))
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -28,24 +29,25 @@ from app.places import FEATURED  # noqa: E402
 
 
 def main():
-    if TMP.exists():
-        shutil.rmtree(TMP)
+    # Resumes from whatever is already in the build cache; delete data/seed-build for a clean rebuild.
     year = dt.date.today().year
-    c = TestClient(app)
-    for p in FEATURED:
-        q = {"lat": p["lat"], "lon": p["lon"], "km": p["km"]}
-        rng = {**q, "start_year": year - 9, "end_year": year}
-        print(f"{p['name']}: series", flush=True)
-        s = c.get("/api/series", params=rng).json()
-        c.get("/api/series", params={**rng, "start_year": year})  # the quick current-year view
-        for kind in ("evi", "lst", "burned", "landcover"):
-            print(f"  {kind}", flush=True)
-            c.get(f"/api/extra/{kind}", params=rng)
-        c.get("/api/terrain", params=q)
-        c.get("/api/street", params={"lat": p["lat"], "lon": p["lon"]})
-        c.get("/api/reverse", params={"lat": p["lat"], "lon": p["lon"]})
-        for ev in (s.get("stats") or {}).get("events", [])[:4]:
-            c.get("/api/explain", params={**rng, "event_start": ev["start"], "direction": ev["direction"]})
+    # One client context = one event loop for all requests (the shared ORNL request limiter is loop-bound).
+    with TestClient(app) as c:
+        for p in FEATURED:
+            q = {"lat": p["lat"], "lon": p["lon"], "km": p["km"]}
+            rng = {**q, "start_year": year - 9, "end_year": year}
+            print(f"{p['name']}: series", flush=True)
+            s = c.get("/api/series", params=rng).json()
+            c.get("/api/series", params={**rng, "start_year": year})  # the quick current-year view
+            for kind in ("evi", "lst", "burned", "landcover"):
+                print(f"  {kind}", flush=True)
+                c.get(f"/api/extra/{kind}", params=rng)
+            c.get("/api/terrain", params=q)
+            c.get("/api/street", params={"lat": p["lat"], "lon": p["lon"]})
+            c.get("/api/reverse", params={"lat": p["lat"], "lon": p["lon"]})
+            for ev in (s.get("stats") or {}).get("events", [])[:4]:
+                print(f"  explain {ev['start']}", flush=True)
+                c.get("/api/explain", params={**rng, "event_start": ev["start"], "direction": ev["direction"]})
     # Keep only long-lived data (MODIS, terrain, imagery lookups); short-lived caches refresh on the server.
     if SEED.exists():
         shutil.rmtree(SEED)
