@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { InspectSite, Priority } from '../api'
 import { exportFieldCsv, exportFieldGeoJson, printFieldSheet, readFieldCsv, type FieldSummary } from '../fieldSheet'
 import { prettyDate } from '../util'
+import SuscValidationTable from './SuscValidationTable'
 
 interface Props {
   data: Priority | null
@@ -95,23 +96,7 @@ export default function InspectionList(p: Props) {
 
       <details className="method">
         <summary>Is the map any good? Past landslides vs the map</summary>
-        {v.events_usable === 0 ? (
-          <p>No reported landslide inside this area has a location accurate to 1 km or better ({v.events_in_area} reported, all too vague), so the map can't be checked against history here. Field checks are the way to test it.</p>
-        ) : (
-          <>
-            <p>
-              Of <b>{v.events_usable}</b> located landslides in the area, <b>{pct(v.share_in_high)}</b> fall within 100 m of a high cell and{' '}
-              <b>{pct(v.share_in_medium_or_high)}</b> of a medium or high cell, while high covers {pct(v.area_share.high)} and medium or high{' '}
-              {pct(v.area_share.high + v.area_share.medium)} of the area. {v.excluded_vague_location} more were left out because their location is vague.
-            </p>
-            <ul>
-              {v.events.map((e) => <li key={e.date + e.title}>{e.date} · {e.title} · at the point: {e.class_at_point}, within 100 m: <b>{e.highest_within_100m}</b></li>)}
-            </ul>
-            {v.missed.length > 0 && <p><b>Missed:</b> {v.missed.map((m) => `${m.date} ${m.title}`).join('; ')}.</p>}
-          </>
-        )}
-        <p>{v.method}</p>
-        <p className="caveat">{v.caveat}</p>
+        <SuscValidationTable v={v} />
       </details>
       <details className="method">
         <summary>Evidence: data, dates and resolution</summary>

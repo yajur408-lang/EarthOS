@@ -296,3 +296,13 @@ def test_baselines_random_and_rain_only():
     assert obs["hit_rate"] == 1.0
     assert b["random"]["hit_rate_mean"] < 0.3 and b["random"]["p_at_least_observed"] < 0.01
     assert b["rain_only"]["alert_days"] >= b["alert_days"] and b["rain_only"]["hit_rate"] == 1.0
+
+
+def test_validation_compares_like_with_like():
+    from app.screening import priority
+
+    cls = np.zeros((9, 9), dtype=int)
+    cls[4, 4] = 2
+    near = priority._max_filter(cls, 1)
+    assert near.sum() == 2 * 9  # the single high cell reaches its 3x3 neighbourhood
+    assert near[0, 0] == 0 and near[3, 3] == 2

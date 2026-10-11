@@ -422,6 +422,8 @@ export interface SuscValidation {
   events_in_area: number; events_usable: number; excluded_vague_location: number
   share_in_high: number | null; share_in_medium_or_high: number | null
   area_share: Record<SuscClass, number> & { unassessed?: number }
+  area_share_within_100m: Record<SuscClass, number>
+  table: { class: SuscClass; events: number; event_share: number | null; area_share_within_100m: number; frequency_ratio: number | null }[]
   missed: { date: string; title: string }[]
   events: { date: string; title: string; lat: number; lon: number; accuracy: string; origin: string; class_at_point: SuscClass | 'unassessed'; highest_within_100m: SuscClass }[]
   method: string; caveat: string

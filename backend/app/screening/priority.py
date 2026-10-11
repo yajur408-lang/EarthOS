@@ -126,29 +126,55 @@ def build(a: dict, grid, loss: dict | None, events: list[dict], area_center: tup
     return {"sites": out, "total_sites": totals, "validation": validate(a, s, events, grid)}
 
 
+def _max_filter(cls: np.ndarray, r: int) -> np.ndarray:
+    """Highest class within a (2r+1)-cell square of every cell."""
+    padded = np.pad(cls, r, mode="edge")
+    out = cls.copy()
+    h, w = cls.shape
+    for dr in range(-r, r + 1):
+        for dc in range(-r, r + 1):
+            out = np.maximum(out, padded[r + dr:r + dr + h, r + dc:r + dc + w])
+    return out
+
+
 def validate(a: dict, s: dict, events: list[dict], grid) -> dict:
-    """Do past landslides fall in the higher classes more often than the area as a whole?"""
+    """Do past landslides fall in the higher classes more often than the area as a whole?
+
+    Each located landslide (location accurate to 1 km or better) is given the highest class within 100 m of its
+    point, because reported points are rarely exactly on the scar. To keep the comparison fair, the area shares
+    use the same rule: the share of land whose 100 m neighbourhood reaches each class. The frequency ratio is
+    (share of landslides in a class) / (share of area in that class); above 1 means more landslides than the area
+    alone would predict.
+    """
     b = grid.bounds()
     inside = [e for e in events if b["south"] <= e["lat"] <= b["north"] and b["west"] <= e["lon"] <= b["east"]]
     usable = [e for e in inside if e.get("accuracy") in ACCURATE]
     land = a["landcover"] != 80
-    assessed = land & ~s["unassessed"]
-    area_share = {c: float(((s["class"] == k) & assessed).sum()) / max(int(land.sum()), 1)
+    n_land = max(int(land.sum()), 1)
+    r_win = _cells_within(grid, 100)
+    near_cls = _max_filter(s["class"], r_win)
+    area_share = {c: float(((s["class"] == k) & land & ~s["unassessed"]).sum()) / n_land
                   for k, c in enumerate(susceptibility.CLASSES)}
-    area_share["unassessed"] = float((land & s["unassessed"]).sum()) / max(int(land.sum()), 1)
-    r_win = _cells_within(grid, 100)  # 100 m: a reported point is rarely exactly on the scar
+    area_share["unassessed"] = float((land & s["unassessed"]).sum()) / n_land
+    near_share = {c: float(((near_cls == k) & land).sum()) / n_land for k, c in enumerate(susceptibility.CLASSES)}
     rows, cols = s["class"].shape
     checked = []
     for e in usable:
         r = int(np.clip(np.searchsorted(-a["lat"], -e["lat"]), 0, rows - 1))
         c = int(np.clip(np.searchsorted(a["lon"], e["lon"]), 0, cols - 1))
         k_point = int(s["class"][r, c])
-        k_near = int(s["class"][max(r - r_win, 0):r + r_win + 1, max(c - r_win, 0):c + r_win + 1].max())
         checked.append({"date": e["date"], "title": e["title"], "lat": e["lat"], "lon": e["lon"], "accuracy": e["accuracy"],
                         "origin": e["origin"],
                         "class_at_point": "unassessed" if s["unassessed"][r, c] else susceptibility.CLASSES[k_point],
-                        "highest_within_100m": susceptibility.CLASSES[k_near]})
+                        "highest_within_100m": susceptibility.CLASSES[int(near_cls[r, c])]})
     n = len(checked)
+    table = []
+    for c in susceptibility.CLASSES:
+        k = sum(1 for x in checked if x["highest_within_100m"] == c)
+        ev_share = k / n if n else None
+        table.append({"class": c, "events": k, "event_share": None if ev_share is None else round(ev_share, 2),
+                      "area_share_within_100m": round(near_share[c], 3),
+                      "frequency_ratio": None if ev_share is None or not near_share[c] else round(ev_share / near_share[c], 2)})
     in_high = sum(1 for c in checked if c["highest_within_100m"] == "high")
     in_med_or_high = sum(1 for c in checked if c["highest_within_100m"] in ("medium", "high"))
     return {
@@ -157,12 +183,16 @@ def validate(a: dict, s: dict, events: list[dict], grid) -> dict:
         "share_in_high": round(in_high / n, 2) if n else None,
         "share_in_medium_or_high": round(in_med_or_high / n, 2) if n else None,
         "area_share": {k: round(v, 3) for k, v in area_share.items()},
+        # The fair comparison for "highest class within 100 m": the share of land whose 100 m neighbourhood reaches each class.
+        "area_share_within_100m": {k: round(v, 3) for k, v in near_share.items()},
+        "table": table,
         "missed": [c for c in checked if c["highest_within_100m"] == "lower"],
         "events": checked,
-        "method": ("Each reported landslide with a location accurate to 1 km or better is given the highest class within "
-                   "100 m of its point. If the map is informative, a larger share of past landslides should fall in high "
-                   "or medium cells than the share of the area in those classes. Landslides that fall only in 'lower' "
-                   "cells are listed as missed."),
+        "method": ("Each reported landslide located to 1 km or better is given the highest class within 100 m of its point. "
+                   "It is compared with the share of land whose 100 m neighbourhood reaches the same class (the same rule "
+                   "applied to every cell), so the check isn't tilted toward 'high'. Frequency ratio = share of landslides "
+                   "in a class / share of land in it; above 1 means more landslides than area alone predicts. The scheme "
+                   "was not tuned on these points."),
         "caveat": ("Very few located landslides: this is a sanity check, not a validated accuracy. Reported points can be "
                    "hundreds of metres from the actual scar; field checks by local experts are the real test."),
     }

@@ -4,6 +4,7 @@ import { linkProps, navigate } from '../router'
 import { useFetch } from '../useFetch'
 import { prettyDate } from '../util'
 import PageShell from './PageShell'
+import SuscValidationTable from '../components/SuscValidationTable'
 
 const SANTA_ANA = { lat: 9.915, lon: -84.19 }
 const LABEL: Record<string, string> = { fc24: 'rain that day', fc72: '3-day rain', ante7: 'previous 7 days', soil: 'soil wetness' }
@@ -170,19 +171,7 @@ export default function Backtest() {
             </div>
 
             <h2>Susceptibility map vs past landslide locations</h2>
-            {!v ? <p className="muted">{prio.loading ? 'Checking…' : prio.error ?? ''}</p> : v.events_usable === 0 ? (
-              <p>None of the {v.events_in_area} reported landslides inside the screening area has a location accurate to 1 km or better, so the map can't be checked against history here.</p>
-            ) : (
-              <>
-                <p>
-                  Of {v.events_usable} located landslides in the {prio.data!.area.half_km * 2} × {prio.data!.area.half_km * 2} km area, <b>{Math.round((v.share_in_high ?? 0) * 100)}%</b> fall within 100 m of a high-susceptibility cell
-                  ({Math.round(v.area_share.high * 100)}% of the area is high) and <b>{Math.round((v.share_in_medium_or_high ?? 0) * 100)}%</b> within 100 m of medium or high
-                  ({Math.round((v.area_share.high + v.area_share.medium) * 100)}% of the area). {v.excluded_vague_location} more were excluded for vague locations.
-                  {v.missed.length ? ` Missed (only 'lower' within 100 m): ${v.missed.map((m) => m.date).join(', ')}.` : ' None fell only in "lower" cells.'}
-                </p>
-                <p className="muted">{v.caveat}</p>
-              </>
-            )}
+            {!v ? <p className="muted">{prio.loading ? 'Checking…' : prio.error ?? ''}</p> : <SuscValidationTable v={v} />}
 
             <h2>Rules tested</h2>
             <ul>
