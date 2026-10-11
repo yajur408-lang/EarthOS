@@ -232,7 +232,7 @@ def start_loss(lat: float, lon: float, half_km: float, end: dt.date) -> dict:
         except forest_loss.NeedsToken as e:
             job.update(status="unavailable", error=str(e))
         except Exception as e:  # noqa: BLE001
-            job.update(status="error", error=f"{type(e).__name__}: {e}"[:300])
+            job.update(status="error", error=_safe_error(e))
 
     job["task"] = asyncio.ensure_future(go())
     return {k: v for k, v in job.items() if k != "task"}
@@ -251,6 +251,15 @@ def default_loss_end() -> dt.date:
     """Most recent Monday at least 5 days ago (HLS takes a few days to process), so results refresh weekly."""
     d = dt.date.today() - dt.timedelta(days=5)
     return d - dt.timedelta(days=d.weekday())
+
+
+def _safe_error(e: Exception) -> str:
+    """Error text for API responses, with URL query strings removed (NASA's signed download links carry temporary
+    credentials in them) and any bearer token masked."""
+    import re
+    text = re.sub(r"\?[^\s'\"]*", "?…", f"{type(e).__name__}: {e}")
+    text = re.sub(r"(?i)bearer\s+[a-z0-9._-]+", "Bearer …", text)
+    return text[:300]
 
 
 def loss_end_for(date: dt.date | None) -> tuple[dt.date | None, str | None]:
@@ -327,7 +336,7 @@ def start_change(lat: float, lon: float, half_km: float, hazard: str, event: dt.
             except forest_loss.NeedsToken as e:
                 job.update(status="unavailable", error=str(e))
             except Exception as e:  # noqa: BLE001
-                job.update(status="error", error=f"{type(e).__name__}: {e}"[:300])
+                job.update(status="error", error=_safe_error(e))
 
     job["task"] = asyncio.ensure_future(go())
     return {k: v for k, v in job.items() if k != "task"}

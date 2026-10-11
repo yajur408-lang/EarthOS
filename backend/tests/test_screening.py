@@ -317,3 +317,13 @@ def test_landslide_and_flood_classes_are_separate():
     assert list(s["slide_class"][0]) == [2, 0] and list(s["flood_class"][0]) == [0, 2]  # ...for different reasons
     pt = susceptibility.at(s, 0, 1, 2.0, 0.5, "Grassland")
     assert pt["landslide_class"] == "lower" and pt["flood_class"] == "high" and pt["driver"] == "drainage (flood)"
+
+
+def test_job_errors_never_leak_signed_urls_or_tokens():
+    from app.screening import service
+
+    e = RuntimeError("403 for url 'https://bucket.s3.amazonaws.com/f.tif?X-Amz-Security-Token=SECRET&X-Amz-Signature=abc' "
+                     "with Bearer eyJhbGciOi.secret.part")
+    msg = service._safe_error(e)
+    assert "SECRET" not in msg and "abc" not in msg and "eyJhbGciOi" not in msg
+    assert msg.startswith("RuntimeError: 403")

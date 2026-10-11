@@ -12,6 +12,7 @@ import csv
 import datetime as dt
 import gzip
 import math
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -177,17 +178,23 @@ def _distance_km(lat1, lon1, lat2, lon2) -> float:
     return 6371 * 2 * math.asin(math.sqrt(a))
 
 
+@lru_cache(maxsize=1)
+def _catalogue() -> tuple[list[dict], np.ndarray, np.ndarray]:
+    """All landslide records (NASA GLC + local reports), read once, with coordinate arrays for fast distance checks."""
+    rows = []
+    for path, origin, opener in ((HERE / "glc_events.csv.gz", "NASA GLC", gzip.open), (HERE / "events_local.csv", "Local report", open)):
+        with opener(path, "rt", encoding="utf-8") as fh:
+            rows += [{**r, "lat": float(r["lat"]), "lon": float(r["lon"]), "origin": origin,
+                      "rain_triggered": r["trigger"] in RAIN_TRIGGERS} for r in csv.DictReader(fh)]
+    return rows, np.array([r["lat"] for r in rows]), np.array([r["lon"] for r in rows])
+
+
 def events_near(lat: float, lon: float, radius_km: float) -> list[dict]:
-    out = []
-    files = [(gzip.open(HERE / "glc_events.csv.gz", "rt", encoding="utf-8"), "NASA GLC"),
-             (open(HERE / "events_local.csv", encoding="utf-8"), "Local report")]
-    for fh, origin in files:
-        with fh:
-            for r in csv.DictReader(fh):
-                d = _distance_km(lat, lon, float(r["lat"]), float(r["lon"]))
-                if d <= radius_km:
-                    out.append({**r, "lat": float(r["lat"]), "lon": float(r["lon"]), "distance_km": round(d, 1),
-                                "origin": origin, "rain_triggered": r["trigger"] in RAIN_TRIGGERS})
+    rows, la, lo = _catalogue()
+    p1, p2 = math.radians(lat), np.radians(la)
+    h = np.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * np.cos(p2) * np.sin(np.radians(lo - lon) / 2) ** 2
+    d = 6371 * 2 * np.arcsin(np.sqrt(np.clip(h, 0, 1)))
+    out = [{**rows[i], "distance_km": round(float(d[i]), 1)} for i in np.nonzero(d <= radius_km)[0]]  # copies
     return sorted(out, key=lambda e: e["date"])
 
 
