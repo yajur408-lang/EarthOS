@@ -1,5 +1,6 @@
-import { api } from '../api'
+import { api, type BacktestScore } from '../api'
 import { linkProps } from '../router'
+import { useFetch } from '../useFetch'
 import PageShell from './PageShell'
 
 const PREVIEW = api.url('/api/screening/preview.png?lat=9.915&lon=-84.19&half_km=6')
@@ -12,7 +13,17 @@ const FEATURED = [
   { id: 'chirripo', name: 'Chirripó highlands', href: '/explore#lat=9.48&lon=-83.49&km=1', text: 'Montane forest and páramo up to 3,800 m.' },
 ]
 
+interface MethodsSummary {
+  susceptibility_validation?: { events_usable: number }
+  backtest: { scores: BacktestScore[]; baselines: Record<string, { random?: { hit_rate_mean: number }; rain_only?: { hit_rate: number; threshold_mm: number } }> }
+}
+
 export default function Landing() {
+  // One real result, read live from the server (the same numbers as /methods and /backtest).
+  const m = useFetch<MethodsSummary>('landing-methods', (s) => fetch(api.url('/api/methods'), { signal: s }).then((r) => r.json()))
+  const s = m.data?.backtest?.scores?.[0]
+  const b = m.data?.backtest?.baselines?.watch
+  const pct = (v?: number | null) => (v == null ? '–' : `${Math.round(v * 100)}%`)
   return (
     <PageShell>
       <section className="hero">
@@ -23,6 +34,11 @@ export default function Landing() {
             EarthOS maps which slopes and stream corridors are more susceptible, watches steep forest for possible loss, and
             checks rainfall against thresholds tested on past landslides. Every layer names its data and method.
           </p>
+          <p className="for-whom"><b>For</b> schools, neighbourhood groups and municipal staff deciding which slopes and streams to inspect first.</p>
+          <div className="truth">
+            <div><b>Tested</b><span>Rainfall trigger vs {s ? s.events : '…'} past landslide days in the pilot area{s ? `: caught ${s.hits} of ${s.events} (${pct(s.hit_rate)}) vs ${pct(b?.random?.hit_rate_mean)} for random days, and the same as a plain rain-only rule` : ''}.</span></div>
+            <div><b>Not yet tested</b><span>The susceptibility map (only {m.data?.susceptibility_validation?.events_usable ?? '…'} located landslides), the forest-loss watch, and field checks with local experts.</span></div>
+          </div>
           <div className="cta">
             <a className="btn-lg primary" {...linkProps('/explore?pilot=santa-ana')}>Open the Santa Ana pilot</a>
             <a className="btn-lg" {...linkProps('/backtest')}>See the backtest</a>

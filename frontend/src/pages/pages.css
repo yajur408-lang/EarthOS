@@ -80,3 +80,10 @@
   .why-grid { grid-template-columns: 1fr; }
 }
 .doc h3 { font-size: 17px; margin: 22px 0 6px; }
+
+.for-whom { margin: 0 0 14px; font-size: 15px; color: var(--muted); }
+.truth { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 18px; }
+.truth div { display: grid; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 13.5px; line-height: 1.45; }
+.truth div:first-child { box-shadow: inset 4px 0 0 #137333; }
+.truth div:last-child { box-shadow: inset 4px 0 0 #e37400; }
+@media (max-width: 760px) { .truth { grid-template-columns: 1fr; } }
