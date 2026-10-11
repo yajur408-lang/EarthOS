@@ -17,6 +17,7 @@ from .. import config
 from .. import http
 from ..datasets import DATASETS
 from ..places import PLACES
+from ..ratelimit import client_ip
 from ..sources import events
 from ..sources import hls
 from ..sources import nominatim
@@ -35,8 +36,13 @@ router = APIRouter()
 def health(request: Request):
     # xff_entries: how many X-Forwarded-For entries this request arrived with. Sent without the header, it equals the
     # number of proxies in front of the app, which is what TRUSTED_PROXY_HOPS must be set to for the rate limiter.
+    # rate_limited_as: the address the rate limiter uses for this caller, last part masked, so the hop count can be
+    # checked (it should be the caller's own address even when they send a forged X-Forwarded-For).
     fwd = request.headers.get("x-forwarded-for", "")
-    return {"ok": True, "keys": config.key_status(), "xff_entries": len([h for h in fwd.split(",") if h.strip()])}
+    ip = client_ip(request, config.TRUSTED_PROXY_HOPS)
+    masked = ip.rsplit(".", 1)[0] + ".x" if ip.count(".") == 3 else ip.rsplit(":", 2)[0] + ":x"
+    return {"ok": True, "keys": config.key_status(), "xff_entries": len([h for h in fwd.split(",") if h.strip()]),
+            "rate_limited_as": masked}
 
 @router.get("/api/places")
 def places():

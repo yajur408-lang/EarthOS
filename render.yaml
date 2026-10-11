@@ -21,3 +21,6 @@ services:
         sync: false
       - key: RATE_LIMIT_PER_MINUTE
         value: "240"
+      # Proxies in front of the app that append to X-Forwarded-For (measured: 3). See /api/health -> xff_entries.
+      - key: TRUSTED_PROXY_HOPS
+        value: "3"
