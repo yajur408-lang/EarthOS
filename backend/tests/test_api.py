@@ -48,3 +48,14 @@ def test_calibrated_only_inside_the_pilot():
     from app.main import _in_pilot
     assert _in_pilot(9.915, -84.19) and _in_pilot(9.95, -84.15)
     assert not _in_pilot(29.95, -85.42) and not _in_pilot(9.915, -83.9)
+
+
+def test_methods_data_files_are_found():
+    # Guards the routers split: these files are located relative to the package, not the router module.
+    from app.routes import methods  # noqa: F401
+    from pathlib import Path
+    app_dir = Path(main.__file__).resolve().parent
+    assert (app_dir / "data" / "flag_rate.json").exists()
+    assert (app_dir / "screening" / "data" / "catalogs.json").exists()
+    src = (app_dir / "routes" / "methods.py").read_text(encoding="utf8")
+    assert "parent.parent" in src
