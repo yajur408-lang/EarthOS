@@ -27,4 +27,4 @@ RUN useradd --create-home earthos
 USER earthos
 EXPOSE 8000
 # Hosts like Render, Railway and Fly set $PORT; default to 8000 elsewhere.
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --no-proxy-headers"]

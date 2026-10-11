@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from fastapi import HTTPException
 from fastapi import Path
 from fastapi import Query
+from fastapi import Request
 from fastapi.responses import Response
 
 from .. import config
@@ -31,8 +32,11 @@ router = APIRouter()
 
 
 @router.get("/api/health")
-def health():
-    return {"ok": True, "keys": config.key_status()}
+def health(request: Request):
+    # xff_entries: how many X-Forwarded-For entries this request arrived with. Sent without the header, it equals the
+    # number of proxies in front of the app, which is what TRUSTED_PROXY_HOPS must be set to for the rate limiter.
+    fwd = request.headers.get("x-forwarded-for", "")
+    return {"ok": True, "keys": config.key_status(), "xff_entries": len([h for h in fwd.split(",") if h.strip()])}
 
 @router.get("/api/places")
 def places():

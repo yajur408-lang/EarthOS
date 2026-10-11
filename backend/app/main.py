@@ -102,7 +102,7 @@ app = FastAPI(title="EarthOS API", version="0.3.0", lifespan=lifespan)
 # Compress API JSON and the multi-MB JS bundles (roughly 4x smaller on the wire).
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 app.add_middleware(CORSMiddleware, allow_origins=config.ALLOWED_ORIGINS, allow_methods=["GET"], allow_headers=["*"])
-app.add_middleware(RateLimit, per_minute=config.RATE_LIMIT_PER_MINUTE)
+app.add_middleware(RateLimit, per_minute=config.RATE_LIMIT_PER_MINUTE, proxy_hops=config.TRUSTED_PROXY_HOPS)
 
 from .routes import core, hazards, methods, screening, series  # noqa: E402
 from .routes.common import SCREENING_NOTICE, _in_pilot, _screen_area  # noqa: E402,F401  (re-exported for tests and scripts)

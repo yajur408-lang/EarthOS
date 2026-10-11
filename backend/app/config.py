@@ -31,6 +31,9 @@ CACHE_DIR = Path(os.environ.get("CACHE_DIR", _BACKEND / "data" / "cache"))
 # Built frontend to serve from the same origin (one service, one URL). Ignored if missing.
 FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", _BACKEND.parent / "frontend" / "dist"))
 RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "240"))
+# How many proxies in front of the app append to X-Forwarded-For. The client IP is the entry that many places from the
+# right; anything further left was sent by the client and can be forged. 0 = no proxy (use the socket address).
+TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", "1"))
 # Example places whose satellite record is downloaded in the background at startup, so they open instantly.
 PREWARM_PLACES = [p for p in os.environ.get("PREWARM_PLACES", "santa-ana,guanacaste,tempisque,san-carlos,osa,chirripo").split(",") if p.strip()]
 # Pre-computed data for the featured places, copied into the cache at startup (see scripts/build_seed.py).

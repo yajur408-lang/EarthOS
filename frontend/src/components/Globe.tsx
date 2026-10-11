@@ -15,6 +15,7 @@ import {
   LabelStyle,
   Math as CesiumMath,
   Matrix4,
+  NeverTileDiscardPolicy,
   NearFarScalar,
   Rectangle,
   ScreenSpaceEventHandler,
@@ -104,14 +105,20 @@ const GIBS_WMS = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi'
 // antimeridian, which Cesium's tiling schemes can't represent: imagery east of ~108°E was stretched into streaks or
 // never drawn (most visibly as an empty right half in compare mode).
 // GIBS sometimes drops or times out tile requests under load (two compare layers plus the base can be ~100 tiles at once).
-// Cesium never re-requests a failed tile by default, which leaves permanent holes, so retry each tile a few times.
-const GIBS_RETRIES = 4
+// Cesium never re-requests a failed tile by default, which leaves permanent holes, so transient failures (network
+// errors, 429, 5xx) are retried a few times. A 4xx means the tile doesn't exist (no data there), so it isn't retried.
+const GIBS_RETRIES = 3
 function withRetry<T extends ImageryProvider>(p: T): T {
   p.errorEvent.addEventListener((e) => {
-    if (e.timesRetried < GIBS_RETRIES) e.retry = true
+    const status = (e.error as { statusCode?: number } | undefined)?.statusCode
+    const transient = status === undefined || status === 429 || status >= 500
+    if (transient && e.timesRetried < GIBS_RETRIES) e.retry = true
   })
   return p
 }
+// A tile discard policy makes Cesium fetch tiles via XHR (blob) instead of an <img>, so errors carry the HTTP status.
+// (The providers accept tileDiscardPolicy at runtime; their TypeScript options type omits it, hence the spread.)
+const fetchWithStatus = (): object => ({ tileDiscardPolicy: new NeverTileDiscardPolicy() })
 
 function makeProvider(layer: GibsLayer, date?: string): ImageryProvider {
   const credit = new Credit(layer.credit ? `NASA GIBS · ${layer.credit}` : 'NASA GIBS')
@@ -122,6 +129,7 @@ function makeProvider(layer: GibsLayer, date?: string): ImageryProvider {
       parameters: { transparent: true, format: 'image/png', TIME: date ?? 'default' },
       tilingScheme: new GeographicTilingScheme(),
       maximumLevel: 10,
+      ...fetchWithStatus(),
       credit,
     }))
   }
@@ -137,6 +145,7 @@ function makeProvider(layer: GibsLayer, date?: string): ImageryProvider {
     tileWidth: 256,
     tileHeight: 256,
     maximumLevel: level,
+    ...fetchWithStatus(),
     credit,
   }))
 }

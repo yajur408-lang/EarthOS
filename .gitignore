@@ -18,3 +18,7 @@ frontend/dist/
 # local tooling
 .claude/
 backend/data/seed-build/
+
+# test coverage data
+.coverage
+htmlcov/
