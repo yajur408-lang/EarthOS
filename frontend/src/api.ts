@@ -255,10 +255,12 @@ export interface Susceptibility {
   summary: {
     classes: Record<SuscClass, { share: number; uncertain_share: number }>
     uncertain_share: number
+    unassessed_share?: number
+    hand_unknown_share?: number
     slope_driven_share_of_high: number
   }
   at_point: {
-    class: SuscClass; uncertain: boolean; range: [SuscClass, SuscClass]
+    class: SuscClass | 'unassessed'; uncertain: boolean; range: [SuscClass, SuscClass]
     landslide_points: number; flood_points: number; slope_deg: number; hand_m: number | null; land_cover: string
   } | null
   terrain: { elevation_m: [number, number]; steep_share: number; drainage_share: number }
@@ -406,9 +408,9 @@ export interface InspectSite {
 export interface SuscValidation {
   events_in_area: number; events_usable: number; excluded_vague_location: number
   share_in_high: number | null; share_in_medium_or_high: number | null
-  area_share: Record<SuscClass, number>
+  area_share: Record<SuscClass, number> & { unassessed?: number }
   missed: { date: string; title: string }[]
-  events: { date: string; title: string; lat: number; lon: number; accuracy: string; origin: string; class_at_point: SuscClass; highest_within_100m: SuscClass }[]
+  events: { date: string; title: string; lat: number; lon: number; accuracy: string; origin: string; class_at_point: SuscClass | 'unassessed'; highest_within_100m: SuscClass }[]
   method: string; caveat: string
 }
 export interface Priority {

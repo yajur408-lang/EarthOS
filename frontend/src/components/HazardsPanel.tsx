@@ -22,7 +22,8 @@ interface Props {
   lon: number
 }
 
-const CLASS_LABEL: Record<SuscClass, string> = {
+const CLASS_LABEL: Record<SuscClass | 'unassessed', string> = {
+  unassessed: 'Unassessed: drainage could not be traced here (not "lower")',
   lower: 'Lower susceptibility, not safe',
   medium: 'Medium susceptibility',
   high: 'High susceptibility',
@@ -179,6 +180,9 @@ function SusceptibilitySection({ d, show, onShow }: { d: Screening; show: boolea
           )
         })}
         <p className="hint">Hatched part of each bar: cells whose class could change within typical data error ({pct(s.summary.uncertain_share)} of the area).</p>
+        {(s.summary.unassessed_share ?? 0) > 0 && (
+          <p className="hint">Unassessed (grey on the map): {pct(s.summary.unassessed_share!)} of the area, where water leaves the box before reaching a drainage line, so flood susceptibility is unknown.</p>
+        )}
       </div>
       <label className="toggle">
         <input type="checkbox" checked={show} onChange={(e) => onShow(e.target.checked)} />

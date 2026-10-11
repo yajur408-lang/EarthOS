@@ -132,8 +132,10 @@ def validate(a: dict, s: dict, events: list[dict], grid) -> dict:
     inside = [e for e in events if b["south"] <= e["lat"] <= b["north"] and b["west"] <= e["lon"] <= b["east"]]
     usable = [e for e in inside if e.get("accuracy") in ACCURATE]
     land = a["landcover"] != 80
-    area_share = {c: float(((s["class"] == k) & land).sum()) / max(int(land.sum()), 1)
+    assessed = land & ~s["unassessed"]
+    area_share = {c: float(((s["class"] == k) & assessed).sum()) / max(int(land.sum()), 1)
                   for k, c in enumerate(susceptibility.CLASSES)}
+    area_share["unassessed"] = float((land & s["unassessed"]).sum()) / max(int(land.sum()), 1)
     r_win = _cells_within(grid, 100)  # 100 m: a reported point is rarely exactly on the scar
     rows, cols = s["class"].shape
     checked = []
@@ -143,7 +145,8 @@ def validate(a: dict, s: dict, events: list[dict], grid) -> dict:
         k_point = int(s["class"][r, c])
         k_near = int(s["class"][max(r - r_win, 0):r + r_win + 1, max(c - r_win, 0):c + r_win + 1].max())
         checked.append({"date": e["date"], "title": e["title"], "lat": e["lat"], "lon": e["lon"], "accuracy": e["accuracy"],
-                        "origin": e["origin"], "class_at_point": susceptibility.CLASSES[k_point],
+                        "origin": e["origin"],
+                        "class_at_point": "unassessed" if s["unassessed"][r, c] else susceptibility.CLASSES[k_point],
                         "highest_within_100m": susceptibility.CLASSES[k_near]})
     n = len(checked)
     in_high = sum(1 for c in checked if c["highest_within_100m"] == "high")

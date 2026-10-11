@@ -22,7 +22,7 @@ from .settings import AREA, LOSS, SUSC
 
 DIR = CACHE_DIR / "screening"
 VERSION = 2  # bump when the layer maths change (cached arrays)
-PNG_VERSION = 2  # bump when overlay colours change
+PNG_VERSION = 3  # bump when overlay colours change
 
 _inflight: dict[str, asyncio.Task] = {}
 _jobs: dict[str, dict] = {}  # forest-loss jobs: key -> {"status", "progress", "started", "error"}
@@ -132,6 +132,7 @@ def susceptibility_png(a: dict) -> bytes:
     # Uncertain cells (class could change within typical input error) are drawn paler.
     unc = s["uncertain"]
     rgba[unc, 3] = (rgba[unc, 3] * 0.5).astype(np.uint8)
+    rgba[s["unassessed"]] = [128, 128, 128, 110]  # drainage unknown: grey, never the "lower" yellow
     rgba[a["stream"]] = [30, 136, 229, 200]
     rgba[a["landcover"] == 80] = [0, 0, 0, 0]
     return _png(rgba)

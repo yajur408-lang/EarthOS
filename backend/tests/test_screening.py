@@ -240,3 +240,17 @@ def test_current_trigger_when_forecast_service_fails(monkeypatch):
     out = asyncio.run(trigger.current(9.9, -84.2))
     assert out["level"] == "unavailable"
     assert any("Forecast unavailable" in e for e in out["errors"])
+
+
+def test_unknown_drainage_is_never_lower():
+    slope = np.array([[5.0, 5.0, 30.0]])
+    hand = np.array([[np.nan, 50.0, np.nan]])
+    lc = np.array([[10, 10, 30]], dtype=np.uint8)
+    s = susceptibility.score(slope, hand, lc)
+    assert s["unassessed"][0, 0] and not s["unassessed"][0, 1]  # flat + unknown drainage -> unassessed
+    assert s["class"][0, 2] == 2 and not s["unassessed"][0, 2]  # the slope alone already makes it high
+    assert s["uncertain"][0, 0] and s["uncertain"][0, 2]
+    summ = susceptibility.summary(s, np.ones_like(slope, dtype=bool))
+    assert summ["unassessed_share"] == round(1 / 3, 3)
+    assert summ["classes"]["lower"]["share"] == round(1 / 3, 3)  # only the cell with known drainage
+    assert susceptibility.at(s, 0, 0, 5.0, float("nan"), "Tree cover")["class"] == "unassessed"

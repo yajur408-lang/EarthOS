@@ -44,22 +44,30 @@ def score(slope: np.ndarray, hand: np.ndarray, lc: np.ndarray) -> dict:
     ds, dh, dl = SUSC["slope_error_deg"], SUSC["hand_error_m"], SUSC["landcover_error_points"]
     lo = _classify(_combined(np.maximum(slope - ds, 0), hand + dh, adj - dl)[2])
     hi = _classify(_combined(slope + ds, np.maximum(hand - dh, 0), adj + dl)[2])
-    near = (lo != cls) | (hi != cls)
+    # Unknown drainage (HAND NaN: flow leaves the grid before meeting a drainage line) is not "no flood hazard".
+    # Where the landslide part alone would say "lower", the cell is unassessed rather than lower.
+    hand_unknown = ~np.isfinite(hand)
+    unassessed = hand_unknown & (cls == 0)
+    near = (lo != cls) | (hi != cls) | hand_unknown
     driver = np.where(slide >= flood, 0, 1)  # 0 = slope-driven, 1 = drainage-driven
     return {"slide": slide, "flood": flood, "combined": combined, "class": cls, "uncertain": near,
-            "low": lo, "high": hi, "driver": driver}
+            "low": lo, "high": hi, "driver": driver, "hand_unknown": hand_unknown, "unassessed": unassessed}
 
 
 def summary(s: dict, inside: np.ndarray) -> dict:
     cls, unc = s["class"][inside], s["uncertain"][inside]
+    una = s["unassessed"][inside]
     n = max(int(inside.sum()), 1)
     out = {}
     for k, name in enumerate(CLASSES):
-        sel = cls == k
+        sel = (cls == k) & ~una
         out[name] = {"share": round(float(sel.sum()) / n, 3), "uncertain_share": round(float((sel & unc).sum()) / n, 3)}
     return {
         "classes": out,
         "uncertain_share": round(float(unc.sum()) / n, 3),
+        # Drainage couldn't be traced and the slope part alone says "lower": shown as unassessed, not lower.
+        "unassessed_share": round(float(una.sum()) / n, 3),
+        "hand_unknown_share": round(float(s["hand_unknown"][inside].sum()) / n, 3),
         "slope_driven_share_of_high": round(float(((cls == 2) & (s["driver"][inside] == 0)).sum()) / max(int((cls == 2).sum()), 1), 3),
     }
 
@@ -68,7 +76,7 @@ def at(s: dict, r: int, c: int, slope: float, hand: float, lc_name: str) -> dict
     """The class at one cell, with the inputs that produced it."""
     k = int(s["class"][r, c])
     return {
-        "class": CLASSES[k],
+        "class": "unassessed" if s["unassessed"][r, c] else CLASSES[k],
         "uncertain": bool(s["uncertain"][r, c]),
         "range": [CLASSES[int(s["low"][r, c])], CLASSES[int(s["high"][r, c])]],
         "landslide_points": float(s["slide"][r, c]),
