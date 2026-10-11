@@ -18,8 +18,9 @@ resolution and method. The thresholds were set for the Santa Ana pilot; elsewher
 
 ### What is validated
 
-- The **rainfall trigger** for the pilot, against 13 landslide days (2007–2018), with 95% confidence intervals and two
-  baselines. It beats random alert days but **does no better than a simple rain-only threshold** (see Results).
+- The **rainfall trigger** for the pilot, against 12 landslide days (2007–2017, the years the catalogue covers), with 95%
+  confidence intervals and two baselines. It **does not clearly beat random alert days placed in the same months**
+  (p ≈ 0.06) and **does no better than a simple rain-only threshold** (see Results).
 - The vegetation **anomaly detector's false-flag rate**, on synthetic undisturbed series.
 - The **stability** of the inspection ranking under ±20% weight changes.
 
@@ -36,12 +37,16 @@ Produced by `cd backend && python -m scripts.validation_report` (the same code a
 Perfect-forecast hindcast with NASA POWER rain (~50 km cells) against NASA's Global Landslide Catalog (2007–2017
 export) and a CNE report, within 25 km. Several reports on one day count as one landslide day.
 
-| Level | Hit rate (95% CI) | Random days, same count | Rain-only rule, same count | Alerts with no catalogued landslide |
+| Level | Hit rate (95% CI) | Random days, same months and count | Rain-only rule, same count | Alerts with no catalogued landslide |
 |---|---|---|---|---|
-| Elevated or High rainfall | 4/13 = 31% (13–58%) | 6% (95% of draws 0–23%) | ≥ 30.9 mm/day: 31% | 37/41 (78–96%) |
-| High rainfall only | 1/13 = 8% (1–33%) | 1% (95% of draws 0–8%) | ≥ 55.2 mm/day: 15% | 6/7 (49–97%) |
+| Elevated or High rainfall | 4/12 = 33% (14–61%) | 13% (95% of draws 0–33%); as good in 6.2% of draws | ≥ 30.9 mm/day: 33% | 33/37 (75–96%) |
+| High rainfall only | 1/12 = 8% (2–35%) | 2% (95% of draws 0–17%); as good in 23.2% of draws | ≥ 55.2 mm/day: 17% | 6/7 (49–97%) |
 
-- Earlier block 2007–2010: Elevated/High 1/4, High 1/4. Later block 2011–2018: Elevated/High 3/9, High 0/9. The
+- Scored only within 2007–2017, the years the NASA catalogue export covers. The 2018 CNE report (Tapezco) is listed on
+  /backtest but not scored, because alerts around it can't be checked against a catalogue.
+- Random alert days are placed in the same calendar months as the rules' alerts. Drawn from the whole year instead they
+  average 6%, which made the rules look better than they are: alerts and landslides both cluster in the wet season.
+- Earlier block 2007–2010: Elevated/High 1/4, High 1/4. Later block 2011–2017: Elevated/High 3/8, High 0/8. The
   thresholds were set by judgment, not fitted to these events.
 - "Alerts with no catalogued landslide" is an upper bound on false alarms, because catalogues only list slides that made the news.
 - **Susceptibility vs located landslides:** n = 2. Both are within 100 m of a high cell, but 63% of the land is too, so
@@ -50,8 +55,9 @@ export) and a CNE report, within 25 km. Several reports on one day count as one 
   0.44 per point per year, an upper bound that includes real anomalies.
 - **Inspection ranking:** under ±20% on any one weight, slopes keep 10/10 of their top 10 and stream corridors keep at least 8/10.
 
-The honest reading: at this resolution the extra rainfall inputs (3-day rain, antecedent rain, soil wetness) don't yet
-add skill over daily rain alone, and the susceptibility map is untested. Both need more events and field checks.
+The honest reading: at this resolution the trigger is not yet distinguishable from well-timed chance, the extra
+rainfall inputs (3-day rain, antecedent rain, soil wetness) don't add skill over daily rain alone, and the
+susceptibility map is untested. Both need more events and field checks.
 
 ## What it does
 

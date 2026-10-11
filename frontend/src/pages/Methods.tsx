@@ -45,7 +45,14 @@ export default function Methods() {
 
         <h2>What is validated, and what isn't</h2>
         <ul>
-          <li><b>Rainfall trigger (pilot only):</b> backtested against reported landslides with confidence intervals and two baselines (below). It beats random alert days but does no better than a rain-only threshold at the same alert frequency.</li>
+          <li><b>Rainfall trigger (pilot only):</b> backtested against reported landslides with confidence intervals and two baselines (below).{' '}
+            {(() => {
+              const p = bt?.baselines.watch?.random?.p_at_least_observed
+              if (p == null) return 'Comparison with chance loading…'
+              return p < 0.05
+                ? `It beats random alert days placed in the same months (random did as well in ${(p * 100).toFixed(1)}% of draws)`
+                : `It does not clearly beat random alert days placed in the same months (random did as well in ${(p * 100).toFixed(1)}% of draws)`
+            })()}, and it does no better than a rain-only threshold at the same alert frequency.</li>
           <li><b>Susceptibility map:</b> checked against only {M ? M.susceptibility_validation.events_usable : '…'} located landslides in the pilot area, which is far too few to call it validated.</li>
           <li><b>Vegetation anomaly detector:</b> false-flag rate estimated on synthetic undisturbed series (below); no labelled-event evaluation yet.</li>
           <li><b>Forest-loss watch and before/after checks:</b> not independently validated. Patches have not been checked against imagery or on the ground.</li>
@@ -59,7 +66,7 @@ export default function Methods() {
           <>
             <div className="bt-table-wrap">
               <table className="bt-table">
-                <thead><tr><th>Level</th><th>Hit rate</th><th>Random days, same count</th><th>Rain-only rule, same count</th><th>Alerts with no catalogued landslide</th></tr></thead>
+                <thead><tr><th>Level</th><th>Hit rate</th><th>Random days, same months and count</th><th>Rain-only rule, same count</th><th>Alerts with no catalogued landslide</th></tr></thead>
                 <tbody>
                   {bt.scores.map((s) => {
                     const b = bt.baselines[s.level]
@@ -130,7 +137,7 @@ export default function Methods() {
         <ul>
           <li>Rules replayed for every day since {x((c) => c.backtest.start_year)} with observed rain standing in for the forecast (a perfect-forecast hindcast); compared with rain-triggered landslides within {x((c) => c.backtest.radius_km)} km (NASA Global Landslide Catalog 2007–2017 export, plus documented local reports). Reports on the same day count as one.</li>
           <li><b>Hit rate</b> = landslide days with an alert within ±{x((c) => c.backtest.match_days)} day ÷ all; <b>alerts with no catalogued landslide</b> = alert episodes with none within ±{x((c) => c.backtest.match_days)} day ÷ all episodes (an upper bound on false alarms). 95% Wilson intervals; rates from fewer than {x((c) => c.backtest.min_events_for_rate)} events greyed out.</li>
-          <li>Baselines at the same alert frequency: random days ({x((c) => c.backtest.baseline_draws)} seeded draws) and a rain-only threshold. Earlier (before {x((c) => c.backtest.split_year)}) and later blocks are reported separately; the thresholds weren't fitted, and any future tuning must use only the earlier block.</li>
+          <li>Baselines at the same alert frequency: random days in the same calendar months as the alerts ({x((c) => c.backtest.baseline_draws)} seeded draws) and a rain-only threshold. Scored only within {x((c) => c.backtest.catalogue_years[0])}–{x((c) => c.backtest.catalogue_years[1])}, the years the catalogue covers. Earlier (before {x((c) => c.backtest.split_year)}) and later blocks are reported separately; the thresholds weren't fitted, and any future tuning must use only the earlier block.</li>
         </ul>
         <h3>A5. Where to inspect first</h3>
         <ul>

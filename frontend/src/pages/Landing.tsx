@@ -36,7 +36,7 @@ export default function Landing() {
           </p>
           <p className="for-whom"><b>For</b> schools, neighbourhood groups and municipal staff deciding which slopes and streams to inspect first.</p>
           <div className="truth">
-            <div><b>Tested</b><span>Rainfall trigger vs {s ? s.events : '…'} past landslide days in the pilot area{s ? `: caught ${s.hits} of ${s.events} (${pct(s.hit_rate)}) vs ${pct(b?.random?.hit_rate_mean)} for random days, and the same as a plain rain-only rule` : ''}.</span></div>
+            <div><b>Tested</b><span>Rainfall trigger vs {s ? s.events : '…'} past landslide days in the pilot area{s ? `: caught ${s.hits} of ${s.events} (${pct(s.hit_rate)}) vs ${pct(b?.random?.hit_rate_mean)} for random days in the same months, and the same as a plain rain-only rule` : ''}.</span></div>
             <div><b>Not yet tested</b><span>The susceptibility map (only {m.data?.susceptibility_validation?.events_usable ?? '…'} located landslides), the forest-loss watch, and field checks with local experts.</span></div>
           </div>
           <div className="cta">

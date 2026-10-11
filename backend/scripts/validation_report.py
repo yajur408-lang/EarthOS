@@ -35,12 +35,13 @@ def main():
     bt, v, ff, rs = m["backtest"], m["susceptibility_validation"], m["false_flag_rate"], m["ranking_sensitivity"]
     print(f"Pilot: {m['pilot']['name']} ({m['pilot']['lat']}, {m['pilot']['lon']}), box half-width {m['pilot']['half_km']} km\n")
     print(f"Rainfall trigger backtest, {bt['period'][0]} to {bt['period'][1]} (perfect-forecast hindcast, NASA POWER rain):\n")
-    print("| Level | Hit rate (95% CI) | Random days, same count | Rain-only, same count | Alerts with no catalogued landslide |")
+    print("| Level | Hit rate (95% CI) | Random days, same months and count | Rain-only, same count | Alerts with no catalogued landslide |")
     print("|---|---|---|---|---|")
     for s in bt["scores"]:
         b = bt["baselines"][s["level"]]
         name = "Elevated or High" if s["level"] == "watch" else "High only"
-        rnd = f"{pct(b['random']['hit_rate_mean'])} (95% of draws {pct(b['random']['hit_rate_95'][0])}–{pct(b['random']['hit_rate_95'][1])})"
+        rnd = (f"{pct(b['random']['hit_rate_mean'])} (95% of draws {pct(b['random']['hit_rate_95'][0])}–{pct(b['random']['hit_rate_95'][1])}; "
+               f"as good in {b['random']['p_at_least_observed'] * 100:.1f}%)")
         rain = f"≥ {b['rain_only']['threshold_mm']} mm/day: {pct(b['rain_only']['hit_rate'])}"
         print(f"| {name} | {s['hits']}/{s['events']} = {pct(s['hit_rate'])}{ci(s['hit_rate_ci'])} | {rnd} | {rain} | "
               f"{s['no_event_alerts']}/{s['alert_episodes']}{ci(s['no_event_alert_rate_ci'])} |")

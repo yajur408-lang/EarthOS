@@ -215,9 +215,19 @@ def test_forecast_failure_is_unavailable_not_none():
     r = trigger.evaluate({"fc24": None, "fc72": None, "ante7": 40.0, "soil": 0.5})
     assert r["level"] == "unavailable" and r["incomplete"]
     assert r["missing_inputs"] == ["fc24", "fc72"]
-    # Only observed rain missing: the forecast-only rules can still be checked, but compound ones can't.
+    # Observed rain and soil missing, but forecast rain is too low for any rule (the compound rules also need
+    # fc24 >= 25 mm): nothing could fire whatever the missing inputs are, so this is a real "none".
     r = trigger.evaluate({"fc24": 10.0, "fc72": 20.0, "ante7": None, "soil": None})
-    assert r["level"] == "unavailable" and "ante7" in r["missing_inputs"]
+    assert r["level"] == "none" and not r["incomplete"] and r["missing_inputs"] == []
+    # Enough forecast rain for the compound rule's rain part: now the missing soil/antecedent inputs matter.
+    r = trigger.evaluate({"fc24": 30.0, "fc72": 40.0, "ante7": None, "soil": None})
+    assert r["level"] == "unavailable" and {"ante7", "soil"} <= set(r["missing_inputs"])
+    # Soil alone missing on a wet week with a moderate forecast: still undecided.
+    r = trigger.evaluate({"fc24": 30.0, "fc72": 40.0, "ante7": 120.0, "soil": None})
+    assert r["level"] == "unavailable" and r["missing_inputs"] == ["soil"]
+    # Soil missing on a dry week: the compound rule already fails on ante7, so "none".
+    r = trigger.evaluate({"fc24": 30.0, "fc72": 40.0, "ante7": 20.0, "soil": None})
+    assert r["level"] == "none"
     # A Watch that fires on available data stays a Watch, flagged incomplete if Warning rules couldn't be checked.
     r = trigger.evaluate({"fc24": 60.0, "fc72": None, "ante7": None, "soil": None})
     assert r["level"] == "watch" and r["incomplete"]
@@ -346,3 +356,20 @@ def test_missing_rain_never_counts_as_dry():
     levels = trigger.hindcast(pd.DataFrame({"precip_mm": rain, "soil_wetness": 0.5}))
     assert pd.isna(levels.loc["2010-01-10", "fc24"])  # not silently 0 mm
     assert int(levels["level"].max()) == 0
+
+
+
+def test_backtest_baseline_matches_alert_months():
+    import datetime as dt
+
+    days = pd.date_range("2008-01-01", "2009-12-31")
+    level = pd.Series(0, index=days)
+    wet = (days.month == 10)
+    level[wet & (days.day <= 5)] = 1  # alerts only in early October
+    levels = pd.DataFrame({"level": level, "fc24": 0.0}, index=days)
+    events = [{"date": "2008-10-20", "rain_triggered": True, "title": "a"},
+              {"date": "2009-10-25", "rain_triggered": True, "title": "b"}]
+    b = trigger.baselines(levels, events, 1, 1, (dt.date(2008, 1, 1), dt.date(2009, 12, 31)))
+    # Month-matched random alerts land in October, near the October events, so they score far better than
+    # alerts spread over the whole year.
+    assert b["random"]["hit_rate_mean"] > b["random_any_day"]["hit_rate_mean"]

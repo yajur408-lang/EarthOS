@@ -63,6 +63,9 @@ split_year = 2011            # scores are also reported for an earlier block (< 
 min_events_for_rate = 10     # rates from fewer events are shown greyed out ("too few events")
 baseline_draws = 1000        # Monte Carlo draws for the random-days baseline
 baseline_seed = 42           # fixed so the page shows the same numbers every time
+catalogue_years = [2007, 2017]  # years the NASA GLC export covers. Scoring stays inside them: an alert outside the
+                             # catalogue's coverage can only ever look like "no catalogued landslide". Local reports
+                             # outside these years are listed but not scored.
 
 [priority]
 # "Where to inspect first": clusters of high-susceptibility cells, ranked by a transparent weighted score (0-1 parts).
@@ -97,6 +100,7 @@ weights = { susceptibility = 0.35, exposure = 0.30, recent_loss = 0.15, history 
 "trigger.warning" = { origin = "judgment", note = "As above. The backtest shows they do no better than a rain-only threshold at the same frequency." }
 "backtest.match_days" = { origin = "judgment", note = "Reported landslide dates are often a day off." }
 "backtest.radius_km" = { origin = "judgment", note = "About half a NASA POWER rain cell." }
+"backtest.catalogue_years" = { origin = "product docs", note = "Coverage of the NASA Global Landslide Catalog export (2007-2017)." }
 "priority.weights" = { origin = "judgment", note = "Not tuned; a +/-20% sensitivity check is reported on the Methods page." }
 "priority.block_m" = { origin = "judgment", note = "Small enough for a team to walk in one visit." }
 "change.NBR" = { origin = "literature", note = "dNBR >= 0.27 is 'moderate' burn severity (Key & Benson 2006, FIREMON)." }

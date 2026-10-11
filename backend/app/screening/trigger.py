@@ -40,10 +40,16 @@ def evaluate(x: dict) -> dict:
 
     A missing input never counts as "below threshold": if no rule fires and any rule could not be checked
     because an input it needs is missing, the level is "unavailable" (not "none"). If a lower level fires
-    but a higher rule could not be checked, the result is flagged incomplete.
+    but a higher rule could not be checked, the result is flagged incomplete. A rule whose known inputs already
+    fail (e.g. 2 mm of rain when it needs 25 mm) can't fire whatever the missing input is, so it doesn't count
+    as unchecked: missing soil wetness on a dry day still gives "none".
     """
+    def undecided(r: dict) -> bool:
+        known = {k: v for k, v in r.items() if x.get(k) is not None}
+        return len(known) < len(r) and all(x[k] >= v for k, v in known.items())
+
     fired = {lvl: [r for r in TRIGGER[lvl] if _rule_holds(r, x)] for lvl in ("watch", "warning")}
-    unknown = {lvl: [r for r in TRIGGER[lvl] if any(x.get(k) is None for k in r)] for lvl in ("watch", "warning")}
+    unknown = {lvl: [r for r in TRIGGER[lvl] if undecided(r)] for lvl in ("watch", "warning")}
     missing = sorted({k for lvl in unknown for r in unknown[lvl] for k in r if x.get(k) is None})
     if fired["warning"]:
         level, incomplete = "warning", False
@@ -303,7 +309,10 @@ def baselines(levels: pd.DataFrame, events: list[dict], min_level: int, window: 
               period: tuple[dt.date, dt.date]) -> dict:
     """What chance and a simpler rule achieve with the same number of alert days.
 
-    random: alert days drawn uniformly at random over the period (seeded Monte Carlo), same count as the rules.
+    random: the same number of alert days in each calendar month as the rules, placed at random within those months
+      (seeded Monte Carlo). Matching the months matters: alerts and landslides both cluster in the wet season, so
+      days drawn from the whole year would make "beats random" look easier than it is.
+    random_any_day: the same count drawn from the whole year, kept for comparison.
     rain_only: alert on the days with the most rain (fc24), with the threshold set to give the same count.
     """
     lo, hi = period
@@ -315,22 +324,37 @@ def baselines(levels: pd.DataFrame, events: list[dict], min_level: int, window: 
     out: dict = {"alert_days": k, "events": n}
     if not k or not n:
         return out
-    rng = np.random.default_rng(BACKTEST["baseline_seed"])
-    hit_rates, ne_rates = [], []
-    for _ in range(BACKTEST["baseline_draws"]):
-        pick = {days[i] for i in rng.choice(len(days), size=k, replace=False)}
-        r = _score_alert_days(pick, evs, window, period)
-        hit_rates.append(r["hits"] / n)
-        if r["episodes"]:
-            ne_rates.append(r["no_event"] / r["episodes"])
+    alert_months = [d.month for d, lvl in zip(days, in_period["level"]) if lvl >= min_level]
+    by_month = {m: [d for d in days if d.month == m] for m in range(1, 13)}
+    need = {m: alert_months.count(m) for m in range(1, 13)}
     q = lambda xs: [round(float(np.percentile(xs, 2.5)), 3), round(float(np.percentile(xs, 97.5)), 3)]  # noqa: E731
     observed = score(levels, events, min_level, window, period)["hit_rate"] or 0.0
-    out["random"] = {
-        "hit_rate_mean": round(float(np.mean(hit_rates)), 3), "hit_rate_95": q(hit_rates),
-        "no_event_alert_rate_mean": round(float(np.mean(ne_rates)), 3) if ne_rates else None,
-        "p_at_least_observed": round(float(np.mean(np.array(hit_rates) >= observed - 1e-9)), 3),
-        "draws": BACKTEST["baseline_draws"],
-    }
+
+    def monte_carlo(draw) -> dict:
+        rng = np.random.default_rng(BACKTEST["baseline_seed"])
+        hit_rates, ne_rates = [], []
+        for _ in range(BACKTEST["baseline_draws"]):
+            r = _score_alert_days(draw(rng), evs, window, period)
+            hit_rates.append(r["hits"] / n)
+            if r["episodes"]:
+                ne_rates.append(r["no_event"] / r["episodes"])
+        return {
+            "hit_rate_mean": round(float(np.mean(hit_rates)), 3), "hit_rate_95": q(hit_rates),
+            "no_event_alert_rate_mean": round(float(np.mean(ne_rates)), 3) if ne_rates else None,
+            "p_at_least_observed": round(float(np.mean(np.array(hit_rates) >= observed - 1e-9)), 3),
+            "draws": BACKTEST["baseline_draws"],
+        }
+
+    def same_months(rng) -> set:
+        pick: set = set()
+        for m, c in need.items():
+            if c:
+                pool = by_month[m]
+                pick.update(pool[i] for i in rng.choice(len(pool), size=c, replace=False))
+        return pick
+
+    out["random"] = {**monte_carlo(same_months), "matching": "same number of alert days in each calendar month"}
+    out["random_any_day"] = monte_carlo(lambda rng: {days[i] for i in rng.choice(len(days), size=k, replace=False)})
     rain = in_period["fc24"].fillna(-1)
     thr = float(np.sort(rain.to_numpy())[::-1][k - 1])
     rain_days = {d.date() for d in rain.index[rain >= thr]}
@@ -369,9 +393,10 @@ async def _backtest(lat: float, lon: float) -> dict:
     clim = await power.daily_climate(lat, lon, (start - dt.timedelta(days=10)).isoformat(), dt.date.today().isoformat())  # shared with at_date
     levels = hindcast(clim)
     last = levels.index.max().date()
-    # Scoring period: the years the event lists cover (GLC export 2007-2017 plus any local reports), within the rain record.
-    ev_years = [int(e["date"][:4]) for e in events if e["rain_triggered"]] or [2007]
-    period = (max(dt.date(min(min(ev_years), 2007), 1, 1), start), min(dt.date(max(max(ev_years), 2017), 12, 31), last))
+    # Scoring period: the years the catalogue covers, within the rain record. Local reports outside it are listed
+    # (with the level on the day) but not scored, since alerts around them can't be checked against a catalogue.
+    cat_lo, cat_hi = BACKTEST["catalogue_years"]
+    period = (max(dt.date(cat_lo, 1, 1), start), min(dt.date(cat_hi, 12, 31), last))
     scores = [score(levels, events, k, window, period) for k in (1, 2)]
     split = dt.date(BACKTEST["split_year"], 1, 1)
     blocks = []
@@ -388,6 +413,7 @@ async def _backtest(lat: float, lon: float) -> dict:
             e["ante7_mm"] = None if pd.isna(row["ante7"]) else round(float(row["ante7"]), 1)
             e["soil"] = None if pd.isna(row["soil"]) else round(float(row["soil"]), 2)
             e["level_on_day"] = LEVELS[int(levels.loc[d - pd.Timedelta(days=window):d + pd.Timedelta(days=window), "level"].max())]
+        e["scored"] = bool(e["rain_triggered"]) and period[0] <= d.date() <= period[1]
     return {
         "place": {"lat": lat, "lon": lon, "radius_km": radius},
         "period": [period[0].isoformat(), period[1].isoformat()],
@@ -409,13 +435,16 @@ async def _backtest(lat: float, lon: float) -> dict:
             "Hit rate = hits / events (events on the same day count once). 'Alerts with no catalogued landslide' = alert "
             f"episodes with no reported landslide within +/-{window} day(s) / all alert episodes - an upper bound on false "
             "alarms, because catalogues miss many slides. 95% Wilson intervals are shown. Baselines: the same number of "
-            "alert days placed at random (Monte Carlo), and a rain-only rule set to the same number of alert days."
+            "alert days in each calendar month placed at random within those months (Monte Carlo), and a rain-only rule "
+            "set to the same number of alert days."
         ),
         "caveats": [
             "Perfect-forecast hindcast: real forecasts are less accurate, so real-world hit rates would be lower.",
             "Landslide catalogues only include events that made the news, so many 'alerts with no catalogued landslide' may be unreported slides.",
             "NASA POWER rain is a ~50 km grid average, which smooths out the local downpours that often trigger slides.",
             "Few events: treat the rates as a first check of the thresholds, not a validated skill score.",
+            f"Scored only within {cat_lo}-{cat_hi}, the years the NASA catalogue covers; local reports outside those years "
+            "are listed but not scored.",
         ],
         "sources": [GLC_SOURCE,
                     {"name": "NASA POWER daily", "use": "rain and soil wetness", "url": "https://power.larc.nasa.gov/"}],

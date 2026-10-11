@@ -348,7 +348,10 @@ export interface BacktestScore {
 }
 export interface BacktestBaseline {
   alert_days: number; events: number
-  random?: { hit_rate_mean: number; hit_rate_95: [number, number]; no_event_alert_rate_mean: number | null; p_at_least_observed: number; draws: number }
+  /** Same number of alert days in each calendar month as the rules, placed at random within those months. */
+  random?: { hit_rate_mean: number; hit_rate_95: [number, number]; no_event_alert_rate_mean: number | null; p_at_least_observed: number; draws: number; matching?: string }
+  /** Same count drawn from the whole year (ignores the wet season; shown for comparison only). */
+  random_any_day?: { hit_rate_mean: number; hit_rate_95: [number, number]; p_at_least_observed: number; draws: number }
   rain_only?: { threshold_mm: number; alert_days: number; hit_rate: number; hit_rate_ci: [number, number] | null; no_event_alert_rate: number | null }
 }
 export interface Backtest {

@@ -85,10 +85,10 @@ export default function Backtest() {
             </div>
 
             <h2>Compared with chance and a simpler rule</h2>
-            <p className="muted">Same number of alert days in each case, so the comparison is fair.</p>
+            <p className="muted">Same number of alert days in each case, so the comparison is fair. Random days are placed in the same calendar months as the rules' alerts: alerts and landslides both cluster in the wet season, so days drawn from the whole year would make the rules look better than they are.</p>
             <div className="bt-table-wrap">
               <table className="bt-table">
-                <thead><tr><th>Level</th><th>EarthOS rules</th><th>Random days ({d.baselines.watch?.random?.draws ?? 0} draws)</th><th>Rain-only rule</th></tr></thead>
+                <thead><tr><th>Level</th><th>EarthOS rules</th><th>Random days, same months ({d.baselines.watch?.random?.draws ?? 0} draws)</th><th>Rain-only rule</th></tr></thead>
                 <tbody>
                   {d.scores.map((s) => {
                     const b = d.baselines[s.level as 'watch' | 'warning']
@@ -104,6 +104,12 @@ export default function Backtest() {
                 </tbody>
               </table>
             </div>
+            {d.baselines.watch?.random_any_day && (
+              <p className="muted">
+                For comparison, random days drawn from the whole year average {pct(d.baselines.watch.random_any_day.hit_rate_mean)} for
+                Elevated or High. That flatters the rules, which is why the table uses same-month days.
+              </p>
+            )}
             <p className="muted">
               If the rules don't beat the rain-only rule, the extra inputs (3-day rain, antecedent rain, soil wetness) aren't adding skill
               at this resolution; say so rather than claim they do.
@@ -158,7 +164,7 @@ export default function Backtest() {
                         <td>{e.source?.startsWith('http') ? <a href={e.source} target="_blank" rel="noopener noreferrer">{e.title}</a> : e.title}
                           <br /><small className="muted">{e.origin}{e.fatalities && e.fatalities !== '0' ? ` · ${e.fatalities} deaths reported` : ''} · location ±{e.accuracy || '?'}</small></td>
                         <td className="num">{e.distance_km} km</td>
-                        <td>{e.trigger || 'unknown'}{scored ? '' : ' (not scored)'}</td>
+                        <td>{e.trigger || 'unknown'}{scored ? '' : e.rain_triggered ? ' (outside the catalogue years, not scored)' : ' (not scored)'}</td>
                         <td className="num">{e.rain_mm != null ? `${e.rain_mm} mm` : '–'}</td>
                         <td className="num">{e.ante7_mm != null ? `${e.ante7_mm} mm` : '–'}</td>
                         <td className="num">{e.soil ?? '–'}</td>
