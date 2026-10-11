@@ -1,0 +1,77 @@
+{
+ "generated": "2026-10-10",
+ "years": [
+  2017,
+  2025
+ ],
+ "draws_per_place": 200,
+ "params": {
+  "z": 2.0,
+  "min_deviation": 0.05
+ },
+ "places": [
+  {
+   "id": "santa-ana",
+   "name": "Santa Ana",
+   "noise_sigma": 0.022,
+   "null_events_per_year": 0.029,
+   "real_events_per_year": 0.444,
+   "real_flagged_composites": 5,
+   "trusted_composites": 164
+  },
+  {
+   "id": "guanacaste",
+   "name": "Santa Rosa, Guanacaste",
+   "noise_sigma": 0.027,
+   "null_events_per_year": 0.0,
+   "real_events_per_year": 0.0,
+   "real_flagged_composites": 0,
+   "trusted_composites": 171
+  },
+  {
+   "id": "tempisque",
+   "name": "Tempisque basin",
+   "noise_sigma": 0.026,
+   "null_events_per_year": 0.053,
+   "real_events_per_year": 0.556,
+   "real_flagged_composites": 7,
+   "trusted_composites": 183
+  },
+  {
+   "id": "san-carlos",
+   "name": "San Carlos plains",
+   "noise_sigma": 0.032,
+   "null_events_per_year": 0.223,
+   "real_events_per_year": 0.667,
+   "real_flagged_composites": 7,
+   "trusted_composites": 82
+  },
+  {
+   "id": "osa",
+   "name": "Corcovado, Osa Peninsula",
+   "noise_sigma": 0.016,
+   "null_events_per_year": 0.0,
+   "real_events_per_year": 0.111,
+   "real_flagged_composites": 1,
+   "trusted_composites": 56
+  },
+  {
+   "id": "chirripo",
+   "name": "Chirrip\u00f3 highlands",
+   "noise_sigma": 0.032,
+   "null_events_per_year": 0.251,
+   "real_events_per_year": 0.889,
+   "real_flagged_composites": 8,
+   "trusted_composites": 109
+  }
+ ],
+ "null": {
+  "events_per_point_year": 0.093,
+  "flagged_composites_per_point_year": 0.094
+ },
+ "real": {
+  "events_per_point_year": 0.444,
+  "flagged_share_of_trusted_composites": 0.0366
+ },
+ "method": "Run from backend/:  python -m scripts.flag_rate\nWrites app/data/flag_rate.json, which the Methods page shows.\n\nTwo estimates, both using the real detector (analysis.detect / group_events):\n1. Null (no disturbance): for each featured place, synthetic series are built from that place's own seasonal median\n   per 16-day slot plus independent noise with its own robust spread (1.4826 x MAD of the residuals). Nothing\n   unusual happens in them by construction, so every flag is a false flag. Many draws give flags per point-year.\n2. Real data: the same detector on the places' actual 10-year records (seed cache). This includes real anomalies\n   (e.g. the 2026 late green-up at Santa Rosa), so it is an upper bound on the false-flag rate, not an estimate of it.\n\nLimitation: independent Gaussian noise ignores autocorrelation and heavy tails in real NDVI, so the null rate is a\nlower bound on what real, undisturbed series would show."
+}
