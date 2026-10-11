@@ -1,10 +1,10 @@
 /* Guided example, invitation, event evidence, and phone date bar fixes. */
 .story {
   position: absolute; top: 72px; right: 12px; z-index: 35; width: min(360px, calc(100vw - 24px));
-  padding: 14px 16px 12px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-3);
+  padding: 14px 16px 12px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-3);
 }
 .story header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
-.story h3 { margin: 4px 0 6px; font-size: 17px; font-weight: 500; }
+.story h3 { margin: 4px 0 6px; font-size: 17px; font-weight: 600; }
 .story p { margin: 0 0 10px; font-size: 14px; line-height: 1.5; color: var(--muted); }
 .story-progress { display: flex; gap: 4px; margin-bottom: 10px; }
 .story-progress i { flex: 1; height: 3px; border-radius: 2px; background: var(--line); }
@@ -14,10 +14,10 @@
 .story footer .btn.primary { grid-column: 3; }
 .invite {
   position: absolute; top: 72px; left: 50%; transform: translateX(-50%); z-index: 34; display: flex; align-items: center; gap: 10px;
-  padding: 8px 8px 8px 16px; border-radius: 24px; background: var(--surface); box-shadow: var(--shadow-2); font-size: 13.5px;
+  padding: 8px 8px 8px 16px; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-2); font-size: 13.5px;
   max-width: calc(100vw - 24px);
 }
-.conf { font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; margin-left: auto; }
+.conf { font-style: normal; font-size: 11px; padding: 2px 7px; border-radius: var(--r-sm); white-space: nowrap; margin-left: auto; }
 .conf.high { color: #137333; background: #e6f4ea; }
 .conf.medium { color: #7a4f01; background: #fef7e0; }
 .conf.low { color: #a50e0e; background: #fce8e6; }
@@ -30,7 +30,7 @@
 .checks li.pass > span { color: #137333; }
 .checks li.warn > span { color: #e37400; }
 .checks li.fail > span { color: #d93025; }
-.drivers li { padding: 8px 10px; margin: 6px 0; border-radius: 10px; background: var(--surface-2); }
+.drivers li { padding: 8px 10px; margin: 6px 0; border-radius: var(--r-md); background: var(--surface-2); }
 .drivers li.not-supported { opacity: 0.6; }
 .driver-head { display: flex; justify-content: space-between; gap: 8px; }
 .driver-head em { font-style: normal; font-size: 11px; color: var(--muted); }
@@ -39,7 +39,7 @@
 .drivers p span { color: var(--muted); }
 .drivers small { color: var(--faint); }
 .caveat { font-style: italic; }
-.sharp-chip.far { box-shadow: var(--shadow-2), inset 0 0 0 2px #fbbc04; }
+.sharp-chip.far { box-shadow: var(--shadow-2), inset 0 0 0 2px #d99a1e; }
 
 @media (max-width: 760px) {
   .story { top: auto; bottom: 36px; right: 8px; left: 8px; width: auto; }
@@ -47,7 +47,7 @@
   .invite { top: 112px; left: 8px; right: 8px; transform: none; }
   /* Date bar: full width, wraps instead of overflowing; controls sit above it. */
   .datebar-wrap, .with-card .datebar-wrap { left: 8px; right: 8px; transform: none; max-width: none; bottom: 36px; }
-  .datebar { flex-wrap: wrap; height: auto; min-height: 44px; justify-content: center; padding: 4px 6px; border-radius: 22px; }
+  .datebar { flex-wrap: wrap; height: auto; min-height: 44px; justify-content: center; padding: 4px 6px; border-radius: var(--r-md); }
   .layers, .controls { bottom: 132px; }
   .sheet-peek .layers, .sheet-peek .controls { bottom: 216px; }
 }

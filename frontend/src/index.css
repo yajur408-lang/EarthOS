@@ -1,39 +1,76 @@
 :root {
+  /* Design tokens. Three references, one base (see docs/DESIGN.md):
+     the map is a quiet instrument (Carbon-like: Plex type, hairlines, square-ish corners, one accent),
+     the text pages read like an editorial page (serif headlines), the boot screen is austere black. */
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+
+  /* One cool grey family, tinted toward the accent. */
   --surface: #ffffff;
-  --surface-2: #f1f3f4;
-  --hover: rgba(60, 64, 67, 0.08);
-  --line: #e8eaed;
-  --line-strong: #dadce0;
-  --text: #202124;
-  --muted: #5f6368;
-  --faint: #80868b;
-  --accent: #1a73e8;
-  --accent-strong: #1967d2;
-  --accent-soft: #e8f0fe;
-  --red: #d93025;
-  --amber: #e37400;
-  --shadow-1: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
-  --shadow-2: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
-  --shadow-3: 0 2px 3px rgba(60, 64, 67, 0.3), 0 6px 10px 4px rgba(60, 64, 67, 0.15);
+  --surface-2: #f1f4f6;
+  --hover: rgba(16, 42, 58, 0.06);
+  --line: #e1e6ea;
+  --line-strong: #c9d1d8;
+  --text: #111a22;
+  --muted: #47535f;
+  --faint: #66717d;
+  --night: #070b10;
+  /* Single accent: a desaturated ocean teal, so it never competes with the red/amber hazard colours. */
+  --accent: #0b6b80;
+  --accent-strong: #08566a;
+  --accent-soft: #e2f0f3;
+  --red: #c4291c;
+  --amber: #b45f06;
+
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  /* Shadows carry the slate hue and a hairline edge instead of flat black blur. */
+  --shadow-1: 0 0 0 1px rgba(16, 42, 58, 0.08), 0 1px 2px rgba(16, 42, 58, 0.12);
+  --shadow-2: 0 0 0 1px rgba(16, 42, 58, 0.08), 0 2px 4px rgba(16, 42, 58, 0.08), 0 8px 20px -6px rgba(16, 42, 58, 0.22);
+  --shadow-3: 0 0 0 1px rgba(16, 42, 58, 0.08), 0 4px 8px rgba(16, 42, 58, 0.08), 0 18px 40px -10px rgba(16, 42, 58, 0.32);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
   color-scheme: light;
-  font-family: Roboto, 'Google Sans', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.45;
   color: var(--text);
-  background: #000;
+  background: var(--night);
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: rgba(11, 107, 128, 0.15);
 }
 * { box-sizing: border-box; }
-html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #000; }
+html, body, #root { margin: 0; height: 100%; overflow: hidden; background: var(--night); }
 button, input, select { font: inherit; color: inherit; }
+button, a, input, select, summary { touch-action: manipulation; }
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; }
+p, li, figcaption { text-wrap: pretty; }
 
-/* Boot screen (also inlined in index.html so it paints before JavaScript). */
-.boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-  font: 15px/1.4 Roboto, system-ui, sans-serif; color: #e8eaed; background: radial-gradient(circle at 50% 40%, #13305a 0, #05080f 62%); }
-.boot-globe { width: 84px; height: 84px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #7dd3fc, #16a34a 55%, #0b3d2e);
-  box-shadow: 0 0 60px rgba(56, 189, 248, 0.35); animation: boot-spin 3s linear infinite; }
-.boot b { font-size: 26px; font-weight: 500; }
-.boot span { color: #9aa0a6; font-size: 13px; }
+/* Press feedback on every button-like control; colour changes ease instead of snapping. */
+button, .btn, .btn-lg, .chip, .ctrl, .place {
+  transition: background-color 0.18s var(--ease), color 0.18s var(--ease), border-color 0.18s var(--ease),
+    box-shadow 0.18s var(--ease), transform 0.12s var(--ease);
+}
+button:not(:disabled):active, .btn-lg:active, .place:active { transform: translateY(1px) scale(0.985); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Boot screen (also inlined in index.html so it paints before JavaScript). Austere on purpose: black, one ring, one line. */
+.boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  font: 15px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #e9eef2; background: #070b10; }
+.boot-globe { position: relative; width: 72px; height: 72px; margin-bottom: 10px; border-radius: 50%; border: 1px solid #2a3540;
+  background: radial-gradient(circle at 34% 30%, #1c4a57 0, #0c1d26 58%, #070b10 100%); }
+.boot-globe::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; border: 1px solid transparent;
+  border-top-color: #7fc4d2; animation: boot-spin 1.6s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite; }
+.boot b { font-size: 22px; font-weight: 500; letter-spacing: 0.02em; }
+.boot span { color: #93a1ad; font-size: 13px; text-align: center; padding: 0 24px; }
+.boot small { position: absolute; bottom: 24px; left: 16px; right: 16px; text-align: center; color: #66737f;
+  font: 500 11px/1.4 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase; }
 @keyframes boot-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .boot-globe::after { animation: none; border-color: #2a3540; border-top-color: #7fc4d2; } }

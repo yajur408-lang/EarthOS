@@ -22,7 +22,7 @@ export default function About() {
         </p>
         <p>
           EarthOS answers with three layers and one test: susceptibility, a slope forest-loss watch and a rainfall trigger, plus a
-          backtest that scores the trigger against past landslides, misses and false alarms included. Everything runs on free, open
+          backtest that scores the trigger against past landslides, misses and alerts with no catalogued landslide included. Everything runs on free, open
           data, so it costs little to keep running and can be repeated for any town.
         </p>
 
@@ -32,7 +32,7 @@ export default function About() {
           <li><b>Evidence for every flag:</b> each listed square says why it is listed, and each input names its source, date and resolution.</li>
           <li><b>For a decision:</b> a school, neighbourhood group or the municipality can print the ranked list as a field sheet, inspect the top squares first, and record what they find.</li>
           <li><b>Checked by local experts:</b> the completed sheet is imported back to show whether the top-ranked squares showed more signs (cracks, tilted trees, seepage, scarps, blocked drains) than lower-ranked ones. Planned partners for Santa Ana: the municipal emergency committee, the CNE, and geology or geography teachers. This field validation has not been done yet.</li>
-          <li><b>Tested against history:</b> the rainfall rules are backtested (hit rate, false-alarm rate and every missed event are shown), and the susceptibility map is checked against where past landslides were reported.</li>
+          <li><b>Tested against history:</b> the rainfall rules are backtested (hit rate, alerts with no catalogued landslide and every missed event are shown), and the susceptibility map is checked against where past landslides were reported.</li>
         </ul>
 
         <h2>Why</h2>

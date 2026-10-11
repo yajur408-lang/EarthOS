@@ -4,25 +4,29 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b1220" />
+    <meta name="theme-color" content="#070b10" />
     <meta name="description" content="Landslide and flash-flood screening from open satellite data, piloted in Santa Ana, Costa Rica: susceptibility, a slope forest-loss watch and a rainfall trigger tested on past landslides. Screening tool, not an official warning." />
     <meta property="og:title" content="EarthOS - landslide and flash-flood screening" />
     <meta property="og:description" content="Open NASA and ESA data on a 3D globe: where slopes and streams are more susceptible, where steep forest may have been lost, and when rain nears levels seen in past landslides." />
     <title>EarthOS - landslide and flash-flood screening</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" />
     <style>
       /* Painted before any JavaScript loads, so a cold start never shows a blank screen. */
-      html, body { margin: 0; height: 100%; background: #05080f; }
-      .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-        font: 15px/1.4 Roboto, system-ui, sans-serif; color: #e8eaed;
-        background: radial-gradient(circle at 50% 40%, #13305a 0, #05080f 62%); }
-      .boot-globe { width: 84px; height: 84px; border-radius: 50%;
-        background: radial-gradient(circle at 35% 30%, #7dd3fc, #16a34a 55%, #0b3d2e);
-        box-shadow: 0 0 60px rgba(56, 189, 248, 0.35); animation: boot-spin 3s linear infinite; }
-      .boot b { font-size: 26px; letter-spacing: 0.5px; font-weight: 500; }
-      .boot span { color: #9aa0a6; font-size: 13px; text-align: center; padding: 0 24px; }
-      @keyframes boot-spin { from { filter: hue-rotate(0deg); transform: rotate(0deg); } to { filter: hue-rotate(20deg); transform: rotate(360deg); } }
+      html, body { margin: 0; height: 100%; background: #070b10; }
+      .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+        font: 15px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #e9eef2; background: #070b10; }
+      .boot-globe { position: relative; width: 72px; height: 72px; margin-bottom: 10px; border-radius: 50%; border: 1px solid #2a3540;
+        background: radial-gradient(circle at 34% 30%, #1c4a57 0, #0c1d26 58%, #070b10 100%); }
+      .boot-globe::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; border: 1px solid transparent;
+        border-top-color: #7fc4d2; animation: boot-spin 1.6s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite; }
+      .boot b { font-size: 22px; font-weight: 500; letter-spacing: 0.02em; }
+      .boot span { color: #93a1ad; font-size: 13px; text-align: center; padding: 0 24px; }
+      .boot small { position: absolute; bottom: 24px; left: 16px; right: 16px; text-align: center; color: #66737f;
+        font: 500 11px/1.4 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .boot-globe::after { animation: none; border-color: #2a3540; border-top-color: #7fc4d2; } }
     </style>
   </head>
   <body>
@@ -31,13 +35,14 @@
         <div class="boot-globe" aria-hidden="true"></div>
         <b>EarthOS</b>
         <span id="boot-msg">Loading…</span>
+        <small>Screening tool · not an official warning</small>
       </div>
     </div>
     <script>
       // If the server was asleep (free hosting), say so instead of looking broken.
       setTimeout(function () {
         var m = document.getElementById('boot-msg')
-        if (m) m.textContent = 'Waking up the server - this can take up to a minute after a quiet spell…'
+        if (m) m.textContent = 'Waking up the server — this can take up to a minute after a quiet spell…'
       }, 4000)
     </script>
     <script type="module" src="/src/main.tsx"></script>

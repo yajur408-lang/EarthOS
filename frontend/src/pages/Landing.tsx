@@ -28,7 +28,7 @@ export default function Landing() {
     <PageShell>
       <section className="hero">
         <div className="hero-text">
-          <p className="eyebrow">Pilot: Santa Ana, Costa Rica · the layers run anywhere; thresholds are calibrated only for the pilot</p>
+          <p className="eyebrow"><span>Pilot · Santa Ana, Costa Rica</span> The layers run anywhere; thresholds are calibrated only for the pilot.</p>
           <h1>Landslide and flash-flood screening from open satellite data.</h1>
           <p className="lead">
             EarthOS maps which slopes and stream corridors are more susceptible, watches steep forest for possible loss, and
@@ -61,7 +61,7 @@ export default function Landing() {
           <li><b>Susceptibility.</b> Slope, height above the nearest stream and land cover give each 30 m cell a lower, medium or high class, with the cells whose class is uncertain marked.</li>
           <li><b>Slope forest-loss watch.</b> NASA HLS 30 m NDVI flags patches of 0.5 ha or more on slopes over 15° that are much less green than the same season in past years. Cause unconfirmed.</li>
           <li><b>Rainfall trigger.</b> Forecast rain, the last 7 days of rain and soil wetness give an Elevated or High rainfall level (screening levels, not official warnings). Thresholds sit in one config file.</li>
-          <li><b>Backtest.</b> The same rules are replayed over 20+ years of daily rain and scored against reported landslides: hit rate and false-alarm rate, shown openly.</li>
+          <li><b>Backtest.</b> The same rules are replayed over 20+ years of daily rain and scored against reported landslides: hit rate and alerts with no catalogued landslide, shown openly.</li>
         </ol>
       </section>
 
@@ -94,7 +94,7 @@ export default function Landing() {
         </div>
         <div>
           <h3>Tested in the open</h3>
-          <p>The rainfall thresholds are scored against past landslides, including the misses and false alarms. <a {...linkProps('/backtest')}>See the backtest</a>.</p>
+          <p>The rainfall thresholds are scored against past landslides, including the misses and the alerts with no catalogued landslide. <a {...linkProps('/backtest')}>See the backtest</a>.</p>
         </div>
         <div>
           <h3>No verdicts</h3>

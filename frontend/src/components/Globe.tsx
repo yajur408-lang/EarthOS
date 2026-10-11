@@ -257,7 +257,7 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       const ctx = out.getContext('2d')!
       ctx.drawImage(src, 0, 0)
       const pad = Math.round(8 * (src.width / src.clientWidth))
-      ctx.font = `${Math.round(11 * (src.width / src.clientWidth))}px Roboto, sans-serif`
+      ctx.font = `${Math.round(11 * (src.width / src.clientWidth))}px 'IBM Plex Sans', sans-serif`
       const w = ctx.measureText(credit).width
       ctx.fillStyle = 'rgba(0,0,0,0.55)'
       ctx.fillRect(0, out.height - pad * 3, w + pad * 2, pad * 3)
@@ -536,7 +536,7 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         scaleByDistance: new NearFarScalar(1e3, 1.2, 5e6, 0.6),
       },
       label: m.label ? {
-        text: m.label, font: '500 12px Roboto, sans-serif', fillColor: Color.WHITE, outlineColor: Color.BLACK,
+        text: m.label, font: "500 12px 'IBM Plex Sans', sans-serif", fillColor: Color.WHITE, outlineColor: Color.BLACK,
         outlineWidth: 3, style: LabelStyle.FILL_AND_OUTLINE, verticalOrigin: VerticalOrigin.BOTTOM,
         pixelOffset: new Cartesian2(0, -10), heightReference: HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY, distanceDisplayCondition: new DistanceDisplayCondition(0, 2_500_000),

@@ -14,6 +14,7 @@ function Boot() {
       <div className="boot-globe" aria-hidden="true" />
       <b>EarthOS</b>
       <span>Loading…</span>
+      <small>Screening tool · not an official warning</small>
     </div>
   )
 }
