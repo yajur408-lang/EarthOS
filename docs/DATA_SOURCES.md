@@ -1,7 +1,18 @@
 # Data sources, licences and commercial-use review
 
-Last verified: **2026-10-10**. Re-check before any paid launch, because terms change.
+Last verified: **2026-10-10** (see the re-check table; Mapillary and the US-government sources were not re-fetched in that pass). Re-check before any paid launch, because terms change.
 The in-app panel (`frontend/src/licences.ts`) mirrors this file.
+
+## Licence re-check (2026-10-10)
+
+| Source | Re-checked against | Finding |
+|---|---|---|
+| MET Norway Locationforecast | api.met.no/doc/License | Dual-licensed NLOD 2.0 and CC BY 4.0; credit "Data from MET Norway". No change needed. |
+| OSM Nominatim (public server) | operations.osmfoundation.org/policies/nominatim | Max 1 request/s, no autocomplete, cache results, identify with a User-Agent, show attribution (ODbL). EarthOS complies (search on Enter, proxied and cached, contact in the User-Agent). The policy warns that commercial apps serving paying customers should not depend on the public server: **if EarthOS is monetised, switch to a self-hosted or commercial Nominatim** (`NOMINATIM_URL`). |
+| ESA WorldCover 2021 v200 | esa-worldcover.org/en/data-access | CC BY 4.0, "without restriction of use"; required credit "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium". Matches the in-app credit. |
+| KartaView | OSM wiki and KartaView terms as quoted there (the official terms page wasn't reachable) | Images CC BY-SA 4.0, licensed by each uploader. Displaying unmodified photos with attribution is fine; share-alike applies to **adapted** images (crops or edits), which EarthOS doesn't make. Re-check kartaview.org/terms directly before commercial launch. |
+| Mapillary | Help-centre page returned 403 | **Not re-verified in this pass.** Listed as CC BY-SA 4.0 from the earlier review. |
+| NASA (GIBS, HLS, MODIS, POWER, EONET, GLC), USGS, NOAA (IBTrACS, SPC) | Not re-fetched in this pass | US Government open data / public domain, with the citation requests listed below; these terms rarely change. |
 
 ## Decision checklist
 
