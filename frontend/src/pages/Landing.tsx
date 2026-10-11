@@ -49,7 +49,7 @@ export default function Landing() {
           <img className="relief" src={PREVIEW} alt="Shaded relief of Santa Ana with susceptibility classes: red high, orange medium, faint yellow lower; blue drainage lines" loading="eager" />
           <figcaption>
             Santa Ana, 12 × 12 km. Red: high, orange: medium, faint yellow: lower susceptibility (not safe), from slope, height above the
-            nearest drainage line and land cover. Paler = could change class within typical data error. Blue: drainage lines.
+            nearest drainage line and land cover. Paler = changes class often when data errors are simulated. Blue: drainage lines.
             Data: SRTM terrain (Terrain Tiles), ESA WorldCover 2021.
           </figcaption>
         </figure>

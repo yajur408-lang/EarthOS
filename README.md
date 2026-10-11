@@ -63,8 +63,9 @@ susceptibility map is untested. Both need more events and field checks.
 
 **Hazard screening** (Hazards tab, for the place you click):
 - **Susceptibility:** slope (landslide) and height above nearest drainage (HAND, from priority-flood routing on the
-  DEM; flood), with ESA WorldCover land cover. Each hazard has its own class, plus a combined one. Cells whose class
-  changes within typical input error (slope ±3°, HAND ±2 m, one land-cover step) are marked uncertain; cells whose
+  DEM; flood), with ESA WorldCover land cover. Each hazard has its own class, plus a combined one. Input errors are
+  simulated 40 times (slope sd 3°, HAND sd 2 m, land-cover label wrong 23% of the time); cells that keep their class
+  in fewer than 80% of runs are marked uncertain (pilot: 46% of high, 82% of medium, 14% of lower cells). Cells whose
   drainage can't be traced are "unassessed", never "lower". The lowest class always reads "lower susceptibility, not safe".
 - **Slope forest-loss watch:** HLS VI v2.0 NDVI at 30 m with the Fmask cloud mask; patches ≥ 0.5 ha on slopes > 15°
   that are much less green than the same season in prior years. Labelled "Possible vegetation loss, cause unconfirmed".

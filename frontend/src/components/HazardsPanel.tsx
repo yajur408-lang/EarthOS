@@ -171,7 +171,7 @@ function SusceptibilitySection({ d, show, onShow, mode, onMode }: { d: Screening
         <div className={`susc-point ${at.class}`}>
           <b>At the pin: {CLASS_LABEL[at.class]}</b>
           {at.uncertain && (
-            <span>Uncertain: within typical data error this could be {at.range[0] === at.range[1] ? at.range[0] : `${at.range[0]} to ${at.range[1]}`}.</span>
+            <span>Uncertain: with simulated data errors it kept this class in only {at.stability != null ? `${Math.round(at.stability * 100)}%` : 'some'} of runs, and ranged {at.range[0] === at.range[1] ? at.range[0] : `${at.range[0]} to ${at.range[1]}`}.</span>
           )}
           {at.landslide_class && (
             <span>Landslide: <b>{at.landslide_class}</b> · Flood: <b>{at.flood_class}</b>{at.driver ? ` · combined class driven by ${at.driver}` : ''}</span>
@@ -190,7 +190,7 @@ function SusceptibilitySection({ d, show, onShow, mode, onMode }: { d: Screening
             </div>
           )
         })}
-        <p className="hint">Hatched part of each bar: cells whose class could change within typical data error ({pct(s.summary.uncertain_share)} of the area).</p>
+        <p className="hint">Hatched part of each bar: cells that change class in more than 1 in 5 runs with simulated data errors ({pct(s.summary.uncertain_share)} of the area).</p>
         {(s.summary.unassessed_share ?? 0) > 0 && (
           <p className="hint">Unassessed (grey on the map): {pct(s.summary.unassessed_share!)} of the area, where water leaves the box before reaching a drainage line, so flood susceptibility is unknown.</p>
         )}

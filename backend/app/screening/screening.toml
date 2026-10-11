@@ -33,10 +33,16 @@ stream_area_km2 = 0.25                   # upstream area that defines a drainage
 # Combined score = max(landslide points, flood points) -> class
 medium_from = 1.5
 high_from = 2.5
-# Uncertainty: a cell is "uncertain" if its class changes when the inputs move by their typical error
-slope_error_deg = 3.0        # 30 m DEM slope error (SRTM, moderate relief)
-hand_error_m = 2.0           # DEM vertical error carried into height above drainage
-landcover_error_points = 0.5 # one land-cover class step
+# Uncertainty: the inputs are perturbed by random errors of typical size (seeded Monte Carlo). A cell is "uncertain"
+# if it keeps its class in fewer than stable_share of the draws. (Shifting every input to its worst case at once
+# flagged ~99% of high and 100% of medium cells in the pilot, which says nothing about where to be careful.)
+slope_error_deg = 3.0        # 30 m DEM slope error (SRTM, moderate relief): standard deviation of a normal error
+hand_error_m = 2.0           # DEM vertical error carried into height above drainage: standard deviation
+landcover_error_points = 0.5 # one land-cover class step, applied (up or down) when the label is wrong
+landcover_accuracy = 0.767   # chance the WorldCover label is right (2021 v200 global overall accuracy)
+uncertainty_draws = 40
+uncertainty_seed = 7
+stable_share = 0.8           # a class kept in >= 80% of draws is reported as stable
 
 [trigger]
 # Each level fires if ANY of its rules holds; a rule holds if ALL of its minimums are met.
@@ -96,6 +102,8 @@ weights = { susceptibility = 0.35, exposure = 0.30, recent_loss = 0.15, history 
 "susceptibility.medium_from" = { origin = "judgment", note = "Class cut-offs on the 0-3 points scale." }
 "susceptibility.slope_error_deg" = { origin = "judgment", note = "Typical slope error of a 30 m DEM in moderate relief; not measured here." }
 "susceptibility.hand_error_m" = { origin = "judgment", note = "Typical SRTM vertical error carried into HAND; not measured here." }
+"susceptibility.landcover_accuracy" = { origin = "product docs", note = "ESA WorldCover 2021 v200 product validation report: global overall accuracy 76.7%. Not checked locally." }
+"susceptibility.stable_share" = { origin = "judgment", note = "Where to draw the line between stable and uncertain; the Methods page shows the share at this setting." }
 "trigger.watch" = { origin = "judgment", note = "Starting values for the Santa Ana pilot, set before scoring; not official criteria, not fitted." }
 "trigger.warning" = { origin = "judgment", note = "As above. The backtest shows they do no better than a rain-only threshold at the same frequency." }
 "backtest.match_days" = { origin = "judgment", note = "Reported landslide dates are often a day off." }

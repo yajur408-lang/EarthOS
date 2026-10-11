@@ -58,7 +58,7 @@ export default function InspectionList(p: Props) {
                 {p.selected === s.id && (
                   <span className="sparts">
                     Score {s.score.toFixed(2)} = {Object.entries(s.parts).map(([k, x]) => `${PART_LABEL[k]} ${x.toFixed(2)}×${d.weights[k]}`).join(' + ')}.
-                    {' '}{s.area_ha} ha of high susceptibility in the square{s.uncertain_share >= 0.3 ? `; ${pct(s.uncertain_share)} of it could change class within data error` : ''}.
+                    {' '}{s.area_ha} ha of high susceptibility in the square{s.uncertain_share >= 0.3 ? `; ${pct(s.uncertain_share)} of it changes class often under simulated data errors` : ''}.
                     {' '}Centre {s.lat.toFixed(5)}, {s.lon.toFixed(5)}.
                   </span>
                 )}

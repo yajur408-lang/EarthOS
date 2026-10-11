@@ -373,3 +373,20 @@ def test_backtest_baseline_matches_alert_months():
     # Month-matched random alerts land in October, near the October events, so they score far better than
     # alerts spread over the whole year.
     assert b["random"]["hit_rate_mean"] > b["random_any_day"]["hit_rate_mean"]
+
+
+def test_uncertainty_flags_boundary_cells_not_everything():
+    from app.screening import susceptibility as S
+
+    # Same land cover (trees) everywhere; slopes from flat to very steep, far from drainage (HAND 50 m).
+    slope = np.array([[2.0, 20.0, 30.0, 45.0, 25.2, 34.8]])
+    hand = np.full_like(slope, 50.0)
+    lc = np.full(slope.shape, 10, dtype=np.uint8)  # WorldCover 10 = tree cover
+    s = S.score(slope, hand, lc)
+    # Flat ground stays "lower" under any plausible error.
+    assert s["stability"][0, 0] == 1.0 and not s["uncertain"][0, 0]
+    # Cells a fraction of a degree from a slope break flip often.
+    assert s["uncertain"][0, 4] and s["uncertain"][0, 5]
+    # Seeded: the same inputs give the same flags every run.
+    again = S.score(slope, hand, lc)
+    assert (again["stability"] == s["stability"]).all()

@@ -263,6 +263,8 @@ export interface Susceptibility {
   }
   at_point: {
     class: SuscClass | 'unassessed'; uncertain: boolean
+    /** Share of simulated input errors under which the cell keeps its class (0-1). */
+    stability?: number
     landslide_class?: SuscClass; flood_class?: SuscClass | 'unknown'; driver?: string; range: [SuscClass, SuscClass]
     landslide_points: number; flood_points: number; slope_deg: number; hand_m: number | null; land_cover: string
   } | null

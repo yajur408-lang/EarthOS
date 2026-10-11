@@ -22,7 +22,7 @@ from .settings import AREA, LOSS, SUSC
 
 DIR = CACHE_DIR / "screening"
 VERSION = 2  # bump when the layer maths change (cached arrays)
-PNG_VERSION = 3  # bump when overlay colours change
+PNG_VERSION = 4  # bump when overlay colours or the uncertainty shading change
 
 _inflight: dict[str, asyncio.Task] = {}
 _jobs: dict[str, dict] = {}  # forest-loss jobs: key -> {"status", "progress", "started", "error"}
