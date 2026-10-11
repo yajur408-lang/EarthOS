@@ -13,8 +13,8 @@ def test_trigger_rules_any_of_all_of():
     assert trigger.evaluate({"fc24": 26, "fc72": 30, "ante7": 120, "soil": 0.8})["level"] == "watch"
     assert trigger.evaluate({"fc24": 26, "fc72": 30, "ante7": 120, "soil": 0.5})["level"] == "none"
     assert trigger.evaluate({"fc24": 95, "fc72": 100, "ante7": 0, "soil": 0.1})["level"] == "warning"
-    # Missing inputs never satisfy a rule
-    assert trigger.evaluate({"fc24": None, "fc72": None, "ante7": 500, "soil": 1.0})["level"] == "none"
+    # Missing inputs never satisfy a rule - and never read as "nothing to worry about"
+    assert trigger.evaluate({"fc24": None, "fc72": None, "ante7": 500, "soil": 1.0})["level"] == "unavailable"
 
 
 def test_backtest_scoring_hits_and_false_alarms():
@@ -207,3 +207,36 @@ def test_priority_squares_reasons_and_validation():
     assert slopes[0]["parts"]["history"] == 1.0
     v = res["validation"]
     assert v["events_usable"] == 1 and v["share_in_high"] == 1.0 and v["missed"] == []
+
+
+def test_forecast_failure_is_unavailable_not_none():
+    # MET Norway down: no forecast. Observed rain and soil are there but every rule needs a forecast value.
+    r = trigger.evaluate({"fc24": None, "fc72": None, "ante7": 40.0, "soil": 0.5})
+    assert r["level"] == "unavailable" and r["incomplete"]
+    assert r["missing_inputs"] == ["fc24", "fc72"]
+    # Only observed rain missing: the forecast-only rules can still be checked, but compound ones can't.
+    r = trigger.evaluate({"fc24": 10.0, "fc72": 20.0, "ante7": None, "soil": None})
+    assert r["level"] == "unavailable" and "ante7" in r["missing_inputs"]
+    # A Watch that fires on available data stays a Watch, flagged incomplete if Warning rules couldn't be checked.
+    r = trigger.evaluate({"fc24": 60.0, "fc72": None, "ante7": None, "soil": None})
+    assert r["level"] == "watch" and r["incomplete"]
+    # Everything present and quiet: genuinely "none".
+    r = trigger.evaluate({"fc24": 1.0, "fc72": 2.0, "ante7": 3.0, "soil": 0.2})
+    assert r["level"] == "none" and not r["incomplete"]
+
+
+def test_current_trigger_when_forecast_service_fails(monkeypatch):
+    import asyncio
+
+    async def boom(lat, lon):
+        raise RuntimeError("MET Norway unreachable")
+
+    async def recent(lat, lon, days=21):
+        idx = pd.date_range(end=pd.Timestamp.today().normalize() - pd.Timedelta(days=3), periods=21)
+        return pd.DataFrame({"precip_mm": 5.0, "soil_wetness": 0.6}, index=idx)
+
+    monkeypatch.setattr(trigger.weather, "forecast", boom)
+    monkeypatch.setattr(trigger.power, "recent_daily", recent)
+    out = asyncio.run(trigger.current(9.9, -84.2))
+    assert out["level"] == "unavailable"
+    assert any("Forecast unavailable" in e for e in out["errors"])

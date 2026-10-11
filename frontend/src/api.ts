@@ -269,13 +269,18 @@ export interface Susceptibility {
   limits: string[]
   error?: string
 }
-export type TriggerLevel = 'none' | 'watch' | 'warning'
+export type TriggerLevel = 'none' | 'watch' | 'warning' | 'unavailable'
 export interface TriggerInputs { fc24: number | null; fc72: number | null; ante7: number | null; soil: number | null }
 export type TriggerRule = Partial<Record<keyof TriggerInputs, number>>
 export interface Trigger {
   /** live = forecast-based (recent days); reconstructed = observed rain stands in for the forecast (older days) */
   mode?: 'live' | 'reconstructed'
   available?: boolean
+  /** Inputs a rule needed but didn't have; with `incomplete`, the result can't be read as "no trigger". */
+  missing_inputs?: (keyof TriggerInputs)[]
+  incomplete?: boolean
+  /** False outside the pilot area: the mm thresholds were set for Santa Ana and aren't validated elsewhere. */
+  calibrated?: boolean
   level: TriggerLevel
   fired: TriggerRule[]
   inputs: TriggerInputs

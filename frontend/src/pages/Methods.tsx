@@ -31,7 +31,7 @@ export default function Methods() {
         <h3>A3. Rainfall trigger</h3>
         <ul>
           <li><b>Inputs:</b> forecast rain for the next 24 and 72 h (MET Norway), observed rain over the last 7 available days and root-zone soil wetness (NASA POWER; about 50 km cells, a few days behind).</li>
-          <li><b>Rules:</b> Watch if forecast 24 h ≥ 50 mm, or 72 h ≥ 80 mm, or (last 7 days ≥ 100 mm and soil wetness ≥ 0.75 and forecast 24 h ≥ 25 mm). Warning at 90 mm, 150 mm, or (150 mm, 0.80, 50 mm). These are starting values, to be tuned against the backtest.</li>
+          <li><b>Rules:</b> "Elevated rainfall" (config key <code>watch</code>) if forecast 24 h ≥ 50 mm, or 72 h ≥ 80 mm, or (last 7 days ≥ 100 mm and soil wetness ≥ 0.75 and forecast 24 h ≥ 25 mm). "High rainfall" (<code>warning</code>) at 90 mm, 150 mm, or (150 mm, 0.80, 50 mm). These are starting values set for the Santa Ana pilot, not official criteria and not validated elsewhere. The names avoid "Watch" and "Warning", which official services use.</li>
           <li>The days between the last observed day and today are counted by neither source; the panel says how many.</li>
         </ul>
         <h3>A4. Backtest</h3>

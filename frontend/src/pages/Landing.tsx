@@ -44,7 +44,7 @@ export default function Landing() {
         <ol>
           <li><b>Susceptibility.</b> Slope, height above the nearest stream and land cover give each 30 m cell a lower, medium or high class, with the cells whose class is uncertain marked.</li>
           <li><b>Slope forest-loss watch.</b> NASA HLS 30 m NDVI flags patches of 0.5 ha or more on slopes over 15° that are much less green than the same season in past years. Cause unconfirmed.</li>
-          <li><b>Rainfall trigger.</b> Forecast rain, the last 7 days of rain and soil wetness give a Watch or Warning. Thresholds sit in one config file.</li>
+          <li><b>Rainfall trigger.</b> Forecast rain, the last 7 days of rain and soil wetness give an Elevated or High rainfall level (screening levels, not official warnings). Thresholds sit in one config file.</li>
           <li><b>Backtest.</b> The same rules are replayed over 20+ years of daily rain and scored against reported landslides: hit rate and false-alarm rate, shown openly.</li>
         </ol>
       </section>

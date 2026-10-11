@@ -26,6 +26,7 @@ export function downloadBlob(filename: string, blob: Blob) {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000)
 }
 
+const DISCLAIMER = 'Screening tool, not an official warning. For alerts follow the national services (Costa Rica: CNE and IMN).'
 const CITATION = 'Sources: NASA MODIS MOD13Q1 v061 (doi:10.5067/MODIS/MOD13Q1.061) via ORNL DAAC; NASA LaRC POWER Project. See EarthOS "Data sources & licences" for all attributions.'
 
 /** One wide CSV: 16-day NDVI rows with their statistics, then daily weather rows. Opens directly in Excel / Sheets. */
@@ -43,7 +44,7 @@ export function exportCsv(place: ExportPlace, series: Series) {
   for (const p of series.climate.points) {
     rows.push(['POWER', p.date, '', '', '', '', '', '', '', '', ...climCols.map((c) => v((p as unknown as Record<string, unknown>)[c]))].join(','))
   }
-  rows.push('', `# ${place.name ?? 'Dropped pin'} ${fmtLatLon(place.lat, place.lon)}; area half-width ${place.km} km`, `# ${CITATION}`)
+  rows.push('', `# ${place.name ?? 'Dropped pin'} ${fmtLatLon(place.lat, place.lon)}; area half-width ${place.km} km`, `# ${CITATION}`, `# ${DISCLAIMER}`)
   downloadBlob(`${slug(place)}.csv`, new Blob([rows.join('\n')], { type: 'text/csv' }))
 }
 
@@ -181,6 +182,7 @@ export async function buildReport(place: ExportPlace, series: Series | null, map
   .grid div { background: #f1f3f4; border-radius: 8px; padding: 8px 10px; } .grid b { display: block; font-size: 18px; font-weight: 500; }
   @media print { body { margin: 0; } h2 { break-after: avoid; } img { break-inside: avoid; } }
 </style></head><body>
+<p style="border:1px solid #e37400;background:#fff4e0;padding:8px 10px;border-radius:6px;font-size:12px"><b>Screening tool, not an official warning.</b> EarthOS output is a screening aid, not an official hazard assessment or alert. For warnings and evacuation orders follow the national services (in Costa Rica: CNE, www.cne.go.cr, and IMN, www.imn.ac.cr). Explanations say what the data are "consistent with", never what caused a change.</p>
 <h1>${esc(place.name ?? 'Dropped pin')}</h1>
 <div class="muted">${esc(place.label ?? '')}<br>${esc(fmtLatLon(place.lat, place.lon))} · area ${place.km === 0 ? 'single 250 m pixel' : `${(2 * place.km + 0.25).toFixed(1)} km square`} · generated ${esc(new Date().toLocaleString())}</div>
 ${mapImage ? `<h2>Map view</h2><img src="${mapImage}" alt="Map view">` : ''}

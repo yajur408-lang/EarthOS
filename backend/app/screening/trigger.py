@@ -1,4 +1,4 @@
-"""Rainfall trigger (Watch / Warning) and its backtest against reported landslides.
+"""Rainfall trigger (levels "Elevated" and "High" rainfall; config keys watch / warning) and its backtest against reported landslides.
 
 Inputs: forecast rain for the next 24 / 72 h (MET Norway), observed rain over the last 7 available days and
 root-zone soil wetness (NASA POWER). Rules live in screening.toml. The backtest replays the same rules over
@@ -35,10 +35,25 @@ def _rule_holds(rule: dict, x: dict) -> bool:
 
 
 def evaluate(x: dict) -> dict:
-    """Level for one set of inputs, with the rules that fired."""
+    """Level for one set of inputs, with the rules that fired.
+
+    A missing input never counts as "below threshold": if no rule fires and any rule could not be checked
+    because an input it needs is missing, the level is "unavailable" (not "none"). If a lower level fires
+    but a higher rule could not be checked, the result is flagged incomplete.
+    """
     fired = {lvl: [r for r in TRIGGER[lvl] if _rule_holds(r, x)] for lvl in ("watch", "warning")}
-    level = "warning" if fired["warning"] else "watch" if fired["watch"] else "none"
-    return {"level": level, "fired": fired[level] if level != "none" else []}
+    unknown = {lvl: [r for r in TRIGGER[lvl] if any(x.get(k) is None for k in r)] for lvl in ("watch", "warning")}
+    missing = sorted({k for lvl in unknown for r in unknown[lvl] for k in r if x.get(k) is None})
+    if fired["warning"]:
+        level, incomplete = "warning", False
+    elif fired["watch"]:
+        level, incomplete = "watch", bool(unknown["warning"])
+    elif unknown["watch"] or unknown["warning"]:
+        level, incomplete = "unavailable", True
+    else:
+        level, incomplete = "none", False
+    return {"level": level, "fired": fired[level] if level in ("watch", "warning") else [],
+            "missing_inputs": missing, "incomplete": incomplete}
 
 
 def _forecast_sums(hours: list[dict]) -> tuple[float, float, str]:
@@ -130,7 +145,7 @@ async def at_date(lat: float, lon: float, date: dt.date) -> dict:
         "errors": [],
     }
     if d not in rain.index or pd.isna(rain.get(d)):
-        return {**base, "level": "none", "fired": [], "available": False,
+        return {**base, "level": "unavailable", "fired": [], "available": False, "missing_inputs": ["fc24", "fc72", "ante7", "soil"], "incomplete": True,
                 "inputs": {"fc24": None, "fc72": None, "ante7": None, "soil": None},
                 "windows": {"forecast_from": None, "observed_from": None, "observed_to": None, "unobserved_days_before_forecast": None},
                 "notes": ["NASA POWER has not published rain for this date yet (it lags a few days)."]}

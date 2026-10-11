@@ -27,10 +27,13 @@ const CLASS_LABEL: Record<SuscClass, string> = {
   medium: 'Medium susceptibility',
   high: 'High susceptibility',
 }
+// Display names avoid "Watch"/"Warning", the words official services use (config keys stay watch/warning).
+const LEVEL_NAME = { watch: 'Elevated rainfall', warning: 'High rainfall' } as const
 const LEVEL_TEXT = {
-  none: { title: 'No rainfall trigger', detail: 'None of the Watch rules are met right now.' },
-  watch: { title: 'Watch', detail: 'Rain amounts meet the Watch rules below.' },
-  warning: { title: 'Warning', detail: 'Rain amounts meet the Warning rules below.' },
+  none: { title: 'No rainfall trigger', detail: 'None of the Elevated-rainfall rules are met right now.' },
+  watch: { title: 'Elevated rainfall', detail: 'Rain amounts meet the Elevated-rainfall rules below.' },
+  warning: { title: 'High rainfall', detail: 'Rain amounts meet the High-rainfall rules below.' },
+  unavailable: { title: 'Could not be evaluated', detail: 'Some inputs are missing, so this is not a "no trigger" result.' },
 }
 const INPUT_LABEL_LIVE: Record<keyof Trigger['inputs'], string> = {
   fc24: 'forecast next 24 h',
@@ -102,12 +105,20 @@ function TriggerSection({ t, lat, lon }: { t: Trigger; lat: number; lon: number 
     <section className="hz">
       <h3>Rainfall trigger <small>{past ? 'reconstructed from observed rain' : 'live forecast'}</small></h3>
       {t.available === false ? (
-        <div className="trigger-badge none"><b>Not available for this day yet</b></div>
+        <div className="trigger-badge unavailable"><b>Not available for this day yet</b><span>Observed rain for this day isn't published yet.</span></div>
       ) : (
         <div className={`trigger-badge ${t.level}`}>
           <b>{lv.title}{past ? ' (reconstructed)' : ''}</b>
           <span>{past ? lv.detail.replace('right now', 'on this day').replace('meet', 'met') : lv.detail}</span>
+          {t.level === 'unavailable' && t.missing_inputs?.length ? (
+            <span>Missing: {t.missing_inputs.map((k) => INPUT_LABEL[k]).join(', ')}{t.missing_inputs.some((k) => k === 'fc24' || k === 'fc72') ? ' (forecast service unavailable)' : ''}.</span>
+          ) : null}
+          {t.level === 'watch' && t.incomplete ? <span>High-rainfall rules couldn't all be checked (missing: {t.missing_inputs?.map((k) => INPUT_LABEL[k]).join(', ')}).</span> : null}
         </div>
+      )}
+      <p className="not-official">Screening tool, not an official warning. For warnings follow the CNE and IMN (or your national service). These thresholds are not official criteria.</p>
+      {t.calibrated === false && (
+        <p className="uncalibrated"><b>Uncalibrated here.</b> The mm thresholds were set for the Santa Ana pilot; how much rain triggers slides differs by climate, soil and slope, so read this as a rough guide only.</p>
       )}
       <dl className="facts">
         {(Object.keys(INPUT_LABEL) as (keyof Trigger['inputs'])[]).map((k) => (
@@ -121,7 +132,7 @@ function TriggerSection({ t, lat, lon }: { t: Trigger; lat: number; lon: number 
       </dl>
       {(['watch', 'warning'] as const).map((lvl) => (
         <div key={lvl} className="rules">
-          <h4>{lvl === 'watch' ? 'Watch' : 'Warning'} if any of:</h4>
+          <h4>{LEVEL_NAME[lvl]} if any of:</h4>
           <ul>
             {t.rules[lvl].map((r) => {
               const on = t.level === lvl && fired.has(JSON.stringify(r))

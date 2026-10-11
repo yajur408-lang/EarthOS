@@ -31,7 +31,7 @@ export default function Backtest() {
       <article className="doc wide">
         <h1>Backtest: rainfall trigger vs past landslides</h1>
         <p className="lead">
-          {isPilot ? 'Santa Ana, Costa Rica (pilot area). ' : ''}How often would the Watch and Warning rules have been active when
+          {isPilot ? 'Santa Ana, Costa Rica (pilot area). ' : ''}How often would the Elevated- and High-rainfall rules have been active when
           landslides were reported nearby, and how often were they active with no landslide reported?
         </p>
         <form className="bt-form" onSubmit={(e) => {
@@ -58,7 +58,7 @@ export default function Backtest() {
             <div className="bt-scores">
               {d.scores.map((s) => (
                 <div key={s.level} className="bt-score">
-                  <h3>{s.level === 'watch' ? 'Watch or Warning' : 'Warning only'}</h3>
+                  <h3>{s.level === 'watch' ? 'Elevated or High rainfall' : 'High rainfall only'}</h3>
                   <div className="big">{pct(s.hit_rate)}</div>
                   <p>hit rate: {s.hits} of {s.events} rain-triggered landslides · <b>missed {s.misses}</b></p>
                   <div className="big">{pct(s.false_alarm_rate)}</div>
@@ -71,7 +71,7 @@ export default function Backtest() {
 
             {d.scores[0]?.missed_events.length > 0 && (
               <>
-                <h2>Missed events (no Watch within ±{d.match_days} day{d.match_days === 1 ? '' : 's'})</h2>
+                <h2>Missed events (no Elevated or High level within ±{d.match_days} day{d.match_days === 1 ? '' : 's'})</h2>
                 <ul>{d.scores[0].missed_events.map((m) => <li key={m.date + m.title}>{m.date} · {m.title}</li>)}</ul>
                 <p className="muted">See the rain columns below: a slide reported on a day with little rain in the ~50 km NASA POWER cell can't be caught by rainfall rules at this resolution.</p>
               </>
@@ -98,7 +98,7 @@ export default function Backtest() {
                         <td className="num">{e.rain_mm != null ? `${e.rain_mm} mm` : '–'}</td>
                         <td className="num">{e.ante7_mm != null ? `${e.ante7_mm} mm` : '–'}</td>
                         <td className="num">{e.soil ?? '–'}</td>
-                        <td className={scored ? (lvl === 'none' ? 'miss' : 'hit') : ''}>{lvl === 'none' ? 'none' : lvl === 'watch' ? 'Watch' : 'Warning'}</td>
+                        <td className={scored ? (lvl === 'none' ? 'miss' : 'hit') : ''}>{lvl === 'none' ? 'none' : lvl === 'watch' ? 'Elevated' : lvl === 'warning' ? 'High' : lvl}</td>
                       </tr>
                     )
                   })}
@@ -123,8 +123,8 @@ export default function Backtest() {
 
             <h2>Rules tested</h2>
             <ul>
-              <li><b>Watch</b> if any of: {d.rules.watch.map(ruleText).join('; or ')}</li>
-              <li><b>Warning</b> if any of: {d.rules.warning.map(ruleText).join('; or ')}</li>
+              <li><b>Elevated rainfall</b> if any of: {d.rules.watch.map(ruleText).join('; or ')}</li>
+              <li><b>High rainfall</b> if any of: {d.rules.warning.map(ruleText).join('; or ')}</li>
             </ul>
             <h2>Method</h2>
             <p>{d.method}</p>
