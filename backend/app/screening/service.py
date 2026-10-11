@@ -164,8 +164,11 @@ def _png(rgba: np.ndarray) -> bytes:
 
 # ------------------------------------------------------------------ forest loss (background job)
 
+LOSS_VERSION = 2  # bump to recompute stored forest-loss results
+
+
 def loss_key(lat: float, lon: float, half_km: float, end: dt.date) -> str:
-    return f"{area_key(lat, lon, half_km)}_{end.isoformat()}"
+    return f"{area_key(lat, lon, half_km)}_L{LOSS_VERSION}_{end.isoformat()}"
 
 
 def loss_status(lat: float, lon: float, half_km: float, end: dt.date) -> dict:
@@ -176,7 +179,7 @@ def loss_status(lat: float, lon: float, half_km: float, end: dt.date) -> dict:
     job = _jobs.get(key)
     st = {k: v for k, v in job.items() if k != "task"} if job else {"status": "not_started"}
     # While a newer run is pending, offer the latest finished one for this area.
-    older = sorted(DIR.glob(f"loss_{area_key(lat, lon, half_km)}_*.json")) if end >= default_loss_end() else []
+    older = sorted(DIR.glob(f"loss_{area_key(lat, lon, half_km)}_L{LOSS_VERSION}_*.json")) if end >= default_loss_end() else []
     if older:
         prev = json.loads(older[-1].read_text())
         st["previous"] = {"end": older[-1].stem.rsplit("_", 1)[-1], **prev}

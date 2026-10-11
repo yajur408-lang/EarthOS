@@ -185,8 +185,9 @@ async def run(grid_lat: np.ndarray, grid_lon: np.ndarray, slope: np.ndarray, cel
         stacks[kind].append(arr)
         used[kind].append({"date": g["date"], "sensor": g["sensor"], "tile": g["tile"], "cloud_pct": g["cloud"],
                            **({"year": g["year"]} if "year" in g else {})})
+    diag = _diagnostics(results, len(recent_g), len(base_g))
     if not stacks["recent"] or not stacks["base"]:
-        return _empty(recent, base, used, "Not enough clear HLS scenes in the recent or baseline windows.")
+        return {**_empty(recent, base, used, "Not enough clear HLS scenes in the recent or baseline windows."), "diagnostics": diag}
 
     rec = np.stack(stacks["recent"])
     bas = np.stack(stacks["base"])
@@ -239,10 +240,20 @@ async def run(grid_lat: np.ndarray, grid_lon: np.ndarray, slope: np.ndarray, cel
         "scenes": {"recent": len(used["recent"]), "baseline": len(used["base"]),
                    "skipped": sum(1 for _, g, a in results if a is None)},
         "qa": _qa_text(),
+        "diagnostics": diag,
         "thresholds": {k: LOSS[k] for k in ("min_patch_ha", "min_slope_deg", "ndvi_drop", "robust_z",
                                              "min_baseline_obs", "min_recent_obs", "max_scene_cloud_pct")},
         "source": SOURCE,
     }
+
+
+def _diagnostics(results, n_recent: int, n_base: int) -> dict:
+    """Counts and a few sample errors (URL query strings removed: signed links carry temporary credentials)."""
+    import re
+    errors = [re.sub(r"\?[^\s']*", "?…", g["error"]) for _, g, a in results if a is None and g.get("error")]
+    empty = sum(1 for _, g, a in results if a is not None and not np.isfinite(a).any())
+    return {"granules_found": {"recent": n_recent, "baseline": n_base}, "read_errors": len(errors),
+            "all_cloud_or_outside": empty, "sample_errors": sorted(set(errors))[:3]}
 
 
 def _qa_text() -> str:
