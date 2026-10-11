@@ -3,41 +3,51 @@ import { api, type LossStatus, type Screening } from './api'
 import { useFetch } from './useFetch'
 
 /**
- * Hazard screening for a place: susceptibility + rainfall trigger at once, then the forest-loss watch,
- * which can take minutes on a first visit, polled every few seconds until it finishes.
+ * Hazard screening for a place on a chosen day: susceptibility + the rainfall trigger for that day at once, then the
+ * forest-loss watch for the 90 days up to it. That job can take minutes on a first run; it is polled until it finishes.
+ * Recent days run it automatically; older days run it when `runLoss` is called.
  */
-export function useScreening(place: { lat: number; lon: number; country: string | null } | null, enabled: boolean) {
-  const key = enabled && place ? `${place.lat},${place.lon},${place.country ?? ''}` : null
-  const res = useFetch<Screening>(key, (s) => api.screening({ lat: place!.lat, lon: place!.lon, country: place!.country ?? undefined }, s))
+export function useScreening(place: { lat: number; lon: number; country: string | null } | null, enabled: boolean, date: string) {
+  const key = enabled && place ? `${place.lat},${place.lon},${place.country ?? ''},${date}` : null
+  const res = useFetch<Screening>(key, (s) => api.screening({ lat: place!.lat, lon: place!.lon, country: place!.country ?? undefined, date }, s))
   const [loss, setLoss] = useState<{ key: string; status: LossStatus } | null>(null)
+  const [nonce, setNonce] = useState(0)
 
   const initial = res.data?.forest_loss ?? null
-  const running = (loss && loss.key === key ? loss.status : initial)?.status === 'running'
+  const status = loss && loss.key === key ? loss.status : initial
+  const busy = status?.status === 'running' || status?.status === 'queued'
+
   useEffect(() => {
-    if (!key || !res.data || !running) return
+    if (!key || !res.data || !busy) return
     const a = res.data.area
-    const end = res.data.forest_loss.end
+    const end = res.data.forest_loss.end!
     let stop = false
-    const tick = async () => {
+    ;(async () => {
       while (!stop) {
         await new Promise((r) => setTimeout(r, 4000))
         if (stop) return
         try {
           const st = await api.forestLoss({ lat: a.lat, lon: a.lon, half_km: a.half_km, end })
           if (stop) return
-          setLoss({ key, status: { ...st, overlay: res.data!.forest_loss.overlay } })
-          if (st.status !== 'running') return
+          setLoss({ key, status: st })
+          if (st.status !== 'running' && st.status !== 'queued') return
         } catch {
           /* keep polling */
         }
       }
-    }
-    tick()
+    })()
     return () => {
       stop = true
     }
-  }, [key, res.data, running])
+  }, [key, res.data, busy, nonce])
 
-  const lossStatus = loss && loss.key === key ? loss.status : initial
-  return { ...res, loss: lossStatus }
+  const runLoss = async () => {
+    if (!key || !res.data?.forest_loss.end) return
+    const a = res.data.area
+    const st = await api.forestLoss({ lat: a.lat, lon: a.lon, half_km: a.half_km, end: res.data.forest_loss.end, start: true })
+    setLoss({ key, status: st })
+    setNonce((n) => n + 1)
+  }
+
+  return { ...res, loss: status, runLoss }
 }

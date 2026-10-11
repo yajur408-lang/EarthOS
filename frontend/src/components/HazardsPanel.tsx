@@ -13,6 +13,7 @@ interface Props {
   showLoss: boolean
   onShowLoss: (on: boolean) => void
   onFly: (lat: number, lon: number) => void
+  onRunLoss: () => void
   lat: number
   lon: number
 }
@@ -27,10 +28,16 @@ const LEVEL_TEXT = {
   watch: { title: 'Watch', detail: 'Rain amounts meet the Watch rules below.' },
   warning: { title: 'Warning', detail: 'Rain amounts meet the Warning rules below.' },
 }
-const INPUT_LABEL: Record<keyof Trigger['inputs'], string> = {
+const INPUT_LABEL_LIVE: Record<keyof Trigger['inputs'], string> = {
   fc24: 'forecast next 24 h',
   fc72: 'forecast next 72 h',
   ante7: 'observed last 7 days',
+  soil: 'root-zone soil wetness',
+}
+const INPUT_LABEL_PAST: Record<keyof Trigger['inputs'], string> = {
+  fc24: 'rain on the day',
+  fc72: 'rain over 3 days from the day',
+  ante7: 'rain in the 7 days before',
   soil: 'root-zone soil wetness',
 }
 const unit = (k: string, v: number) => (k === 'soil' ? v.toFixed(2) : `${v} mm`)
@@ -55,9 +62,10 @@ export default function HazardsPanel(p: Props) {
   return (
     <div className="hazards">
       <Notice d={d} />
+      <p className="hz-date">Screening for <b>{prettyDate(d.date)}</b> · change the day with the date bar</p>
       <TriggerSection t={d.trigger} lat={p.lat} lon={p.lon} />
       <SusceptibilitySection d={d} show={p.showSusc} onShow={p.onShowSusc} />
-      <LossSection loss={p.loss} show={p.showLoss} onShow={p.onShowLoss} onFly={p.onFly} />
+      <LossSection loss={p.loss} show={p.showLoss} onShow={p.onShowLoss} onFly={p.onFly} onRun={p.onRunLoss} />
     </div>
   )
 }
@@ -74,21 +82,27 @@ function Notice({ d }: { d: Screening }) {
   )
 }
 
-function ruleText(r: TriggerRule) {
-  return (Object.entries(r) as [keyof Trigger['inputs'], number][]).map(([k, v]) => `${INPUT_LABEL[k]} ≥ ${unit(k, v)}`).join(' and ')
+function ruleText(r: TriggerRule, labels: Record<keyof Trigger['inputs'], string>) {
+  return (Object.entries(r) as [keyof Trigger['inputs'], number][]).map(([k, v]) => `${labels[k]} ≥ ${unit(k, v)}`).join(' and ')
 }
 
 function TriggerSection({ t, lat, lon }: { t: Trigger; lat: number; lon: number }) {
   if (t.error) return <section className="hz"><h3>Rainfall trigger</h3><div className="alert soft">{t.error}</div></section>
   const fired = new Set(t.fired.map((r) => JSON.stringify(r)))
   const lv = LEVEL_TEXT[t.level]
+  const past = t.mode === 'reconstructed'
+  const INPUT_LABEL = past ? INPUT_LABEL_PAST : INPUT_LABEL_LIVE
   return (
     <section className="hz">
-      <h3>Rainfall trigger <small>landslides and flash floods</small></h3>
-      <div className={`trigger-badge ${t.level}`}>
-        <b>{lv.title}</b>
-        <span>{lv.detail}</span>
-      </div>
+      <h3>Rainfall trigger <small>{past ? 'reconstructed from observed rain' : 'live forecast'}</small></h3>
+      {t.available === false ? (
+        <div className="trigger-badge none"><b>Not available for this day yet</b></div>
+      ) : (
+        <div className={`trigger-badge ${t.level}`}>
+          <b>{lv.title}{past ? ' (reconstructed)' : ''}</b>
+          <span>{past ? lv.detail.replace('right now', 'on this day').replace('meet', 'met') : lv.detail}</span>
+        </div>
+      )}
       <dl className="facts">
         {(Object.keys(INPUT_LABEL) as (keyof Trigger['inputs'])[]).map((k) => (
           <div key={k}>
@@ -105,7 +119,7 @@ function TriggerSection({ t, lat, lon }: { t: Trigger; lat: number; lon: number 
           <ul>
             {t.rules[lvl].map((r) => {
               const on = t.level === lvl && fired.has(JSON.stringify(r))
-              return <li key={JSON.stringify(r)} className={on ? 'on' : ''}><span aria-hidden>{on ? '●' : '○'}</span>{ruleText(r)}</li>
+              return <li key={JSON.stringify(r)} className={on ? 'on' : ''}><span aria-hidden>{on ? '●' : '○'}</span>{ruleText(r, INPUT_LABEL)}</li>
             })}
           </ul>
         </div>
@@ -158,13 +172,22 @@ function SusceptibilitySection({ d, show, onShow }: { d: Screening; show: boolea
   )
 }
 
-function LossSection({ loss, show, onShow, onFly }: { loss: LossStatus | null; show: boolean; onShow: (on: boolean) => void; onFly: (lat: number, lon: number) => void }) {
+function LossSection({ loss, show, onShow, onFly, onRun }: { loss: LossStatus | null; show: boolean; onShow: (on: boolean) => void; onFly: (lat: number, lon: number) => void; onRun: () => void }) {
   const head = <h3>Slope forest-loss watch <small>30 m NASA HLS, slopes over 15°</small></h3>
   if (!loss) return <section className="hz">{head}</section>
   const result: (LossResult & { end?: string }) | null = loss.status === 'done' ? loss : loss.previous ?? null
   return (
     <section className="hz">
       {head}
+      {loss.status === 'not_started' && (
+        <div className="loss-progress">
+          <span>Not yet computed for the 90 days up to {loss.end ? prettyDate(loss.end) : 'this day'}.</span>
+          <button className="btn primary" onClick={onRun}>Run the forest-loss watch for this date</button>
+          <small>Reads a few hundred NASA HLS scenes; takes several minutes, then the result is kept for everyone.</small>
+        </div>
+      )}
+      {loss.status === 'error' && <button className="btn" onClick={onRun}>Try again</button>}
+      {loss.status === 'queued' && <p className="hint">Waiting for another forest-loss run to finish…</p>}
       {loss.status === 'running' && (
         <div className="loss-progress">
           <span>Reading NASA HLS scenes for this area… {Math.round(loss.progress * 100)}%</span>

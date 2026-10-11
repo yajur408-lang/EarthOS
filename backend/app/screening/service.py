@@ -26,6 +26,8 @@ PNG_VERSION = 2  # bump when overlay colours change
 
 _inflight: dict[str, asyncio.Task] = {}
 _jobs: dict[str, dict] = {}  # forest-loss jobs: key -> {"status", "progress", "started", "error"}
+_sem: asyncio.Semaphore | None = None
+HLS_START = dt.date(2014, 1, 1)  # HLS Landsat 8 VI from Apr 2013; a baseline needs at least one earlier year
 
 
 def snap(lat: float, lon: float, half_km: float | None) -> tuple[float, float, float]:
@@ -174,7 +176,7 @@ def loss_status(lat: float, lon: float, half_km: float, end: dt.date) -> dict:
     job = _jobs.get(key)
     st = {k: v for k, v in job.items() if k != "task"} if job else {"status": "not_started"}
     # While a newer run is pending, offer the latest finished one for this area.
-    older = sorted(DIR.glob(f"loss_{area_key(lat, lon, half_km)}_*.json"))
+    older = sorted(DIR.glob(f"loss_{area_key(lat, lon, half_km)}_*.json")) if end >= default_loss_end() else []
     if older:
         prev = json.loads(older[-1].read_text())
         st["previous"] = {"end": older[-1].stem.rsplit("_", 1)[-1], **prev}
@@ -183,15 +185,22 @@ def loss_status(lat: float, lon: float, half_km: float, end: dt.date) -> dict:
 
 def start_loss(lat: float, lon: float, half_km: float, end: dt.date) -> dict:
     st = loss_status(lat, lon, half_km, end)
-    if st["status"] in ("done", "running"):
+    if st["status"] in ("done", "running", "queued", "unavailable"):
         return st
     key = loss_key(lat, lon, half_km, end)
-    job = _jobs[key] = {"status": "running", "progress": 0.0, "started": time.time()}
+    job = _jobs[key] = {"status": "queued" if _sem and _sem.locked() else "running", "progress": 0.0, "started": time.time()}
 
     def progress(p: float):
         job["progress"] = round(p, 3)
 
     async def go():
+        global _sem
+        _sem = _sem or asyncio.Semaphore(1)  # one job at a time: each holds a few hundred scenes in memory
+        async with _sem:
+            job["status"] = "running"
+            await _run(job, progress)
+
+    async def _run(job, progress):
         try:
             a = await area(lat, lon, half_km)
             g = _grid(a)
@@ -216,6 +225,11 @@ def start_loss(lat: float, lon: float, half_km: float, end: dt.date) -> dict:
     return {k: v for k, v in job.items() if k != "task"}
 
 
+def restart_loss(lat: float, lon: float, half_km: float, end: dt.date) -> dict:
+    _jobs.pop(loss_key(lat, lon, half_km, end), None)
+    return start_loss(lat, lon, half_km, end)
+
+
 def loss_png_path(lat: float, lon: float, half_km: float, end: dt.date):
     return DIR / f"loss_{loss_key(lat, lon, half_km, end)}.png"
 
@@ -224,6 +238,16 @@ def default_loss_end() -> dt.date:
     """Most recent Monday at least 5 days ago (HLS takes a few days to process), so results refresh weekly."""
     d = dt.date.today() - dt.timedelta(days=5)
     return d - dt.timedelta(days=d.weekday())
+
+
+def loss_end_for(date: dt.date | None) -> tuple[dt.date | None, str | None]:
+    """End date of the forest-loss window for a chosen day: recent days use the latest weekly run."""
+    latest = default_loss_end()
+    if date is None or date >= latest:
+        return latest, None
+    if date < HLS_START:
+        return None, f"The 30 m HLS record starts in 2013, so the forest-loss watch is available from {HLS_START.isoformat()}."
+    return date, None
 
 
 def loss_ready() -> bool:

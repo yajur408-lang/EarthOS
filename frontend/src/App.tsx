@@ -188,7 +188,7 @@ export default function App() {
   const street = useFetch<StreetNearby>(pointKey, (s) => api.street(pLat!, pLon!, s))
   // Hazard screening: loads with the Hazards tab, or while one of its map layers is on.
   const [hazardLayers, setHazardLayers] = useState({ susc: pilot, loss: pilot })
-  const screening = useScreening(place, tab === 'hazards' || hazardLayers.susc || hazardLayers.loss)
+  const screening = useScreening(place, tab === 'hazards' || hazardLayers.susc || hazardLayers.loss, date)
   const eventsKey = pointKey && extras && tab === 'news' ? pointKey : null
   const events = useFetch<EventsResult>(eventsKey, (s) => api.events({ lat: pLat!, lon: pLon! }, s))
 
@@ -446,7 +446,8 @@ export default function App() {
                 if (on && b) globe.current?.flyToBounds(b.south, b.north, b.west, b.east)
               }}
               showLoss={hazardLayers.loss} onShowLoss={(on) => setHazardLayers((h) => ({ ...h, loss: on }))}
-              onFly={(lat, lon) => { setHazardLayers((h) => ({ ...h, loss: true })); globe.current?.flyTo(lat, lon, 3500, -50) }} />
+              onFly={(lat, lon) => { setHazardLayers((h) => ({ ...h, loss: true })); globe.current?.flyTo(lat, lon, 3500, -50) }}
+              onRunLoss={() => { screening.runLoss().catch((e: Error) => setNotice(`Couldn't start: ${e.message}`)) }} />
           )}
           onClose={() => setPlace(null)}
         />

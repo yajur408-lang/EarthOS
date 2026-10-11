@@ -410,44 +410,54 @@ def _screen_area(lat: float, lon: float, half_km: float | None):
     return service.snap(lat, lon, half_km)
 
 
+DateQ = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Day to screen (default: today)")
+
+
 @app.get("/api/screening")
 async def screening(lat: float = LatQ, lon: float = LonQ, half_km: float | None = Query(None, ge=1, le=8),
-                    country: str | None = None):
-    """Susceptibility summary and the class at the clicked point, the rainfall trigger, and forest-loss status."""
+                    country: str | None = None, date: str | None = DateQ):
+    """Susceptibility (and the class at the point), the rainfall trigger for the chosen day, and the forest-loss watch
+    for the 90 days up to that day. Recent days start the forest-loss job automatically; older ones on request."""
     from .screening import service, trigger
+    day = dt.date.fromisoformat(date) if date else dt.date.today()
     clat, clon, h = _screen_area(lat, lon, half_km)
     susc, trig = await asyncio.gather(
-        service.susceptibility_result(clat, clon, h, (lat, lon)), trigger.current(lat, lon), return_exceptions=True)
-    end = service.default_loss_end()
-    loss = service.loss_status(clat, clon, h, end)
-    if loss["status"] == "not_started" and service.loss_ready():
-        loss = service.start_loss(clat, clon, h, end)
-    elif not service.loss_ready() and loss["status"] == "not_started":
-        loss = {**loss, "status": "unavailable", "error": "The 30 m forest-loss watch needs a NASA Earthdata token on the server."}
-    q = {"lat": clat, "lon": clon, "half_km": h}
+        service.susceptibility_result(clat, clon, h, (lat, lon)), trigger.at_date(lat, lon, min(day, dt.date.today())),
+        return_exceptions=True)
     return {
-        "area": q,
+        "area": {"lat": clat, "lon": clon, "half_km": h},
+        "date": day.isoformat(),
         "notice": SCREENING_NOTICE,
         "official": _official_links(country),
         "susceptibility": susc if not isinstance(susc, Exception) else {"error": f"{type(susc).__name__}: {susc}"},
         "overlay": f"/api/screening/susceptibility.png?lat={clat}&lon={clon}&half_km={h}&v={service.PNG_VERSION}",
-        "trigger": trig if not isinstance(trig, Exception) else {"error": str(trig)},
-        "forest_loss": {**loss, "end": end.isoformat(),
-                        "overlay": f"/api/screening/forest-loss.png?lat={clat}&lon={clon}&half_km={h}&end={end.isoformat()}"},
+        "trigger": trig if not isinstance(trig, Exception) else {"error": f"{type(trig).__name__}: {trig}"},
+        "forest_loss": _loss_payload(clat, clon, h, day, start=None),
     }
+
+
+def _loss_payload(clat: float, clon: float, h: float, day: dt.date, start: bool | None) -> dict:
+    from .screening import service
+    end, why = service.loss_end_for(day)
+    if end is None:
+        return {"status": "unavailable", "error": why}
+    st = service.loss_status(clat, clon, h, end)
+    latest = end == service.default_loss_end()
+    if not service.loss_ready() and st["status"] == "not_started":
+        st = {**st, "status": "unavailable", "error": "The 30 m forest-loss watch needs a NASA Earthdata token on the server."}
+    elif st["status"] in ("not_started", "error") and (start or (start is None and latest)):
+        st = service.start_loss(clat, clon, h, end) if st["status"] == "not_started" else service.restart_loss(clat, clon, h, end)
+    return {**st, "end": end.isoformat(), "latest": latest,
+            "overlay": f"/api/screening/forest-loss.png?lat={clat}&lon={clon}&half_km={h}&end={end.isoformat()}"}
 
 
 @app.get("/api/screening/forest-loss")
 async def screening_loss(lat: float = LatQ, lon: float = LonQ, half_km: float | None = Query(None, ge=1, le=8),
-                         end: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$")):
-    """Status (and result when done) of the forest-loss watch; starts the job if needed. Poll until done."""
-    from .screening import service
+                         date: str | None = DateQ, end: str | None = DateQ, start: bool = False):
+    """Status (and the result when done) of the forest-loss watch for a day. Pass start=true to run it if needed."""
     clat, clon, h = _screen_area(lat, lon, half_km)
-    e = dt.date.fromisoformat(end) if end else service.default_loss_end()
-    st = service.loss_status(clat, clon, h, e)
-    if st["status"] == "not_started":
-        st = service.start_loss(clat, clon, h, e)
-    return {**st, "end": e.isoformat(), "notice": SCREENING_NOTICE}
+    day = dt.date.fromisoformat(end or date) if (end or date) else dt.date.today()
+    return {**_loss_payload(clat, clon, h, day, start=start or None), "notice": SCREENING_NOTICE}
 
 
 @app.get("/api/screening/susceptibility.png")

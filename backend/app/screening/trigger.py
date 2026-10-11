@@ -99,6 +99,61 @@ async def current(lat: float, lon: float) -> dict:
     }
 
 
+LIVE_DAYS = 7  # dates this recent show the live forecast-based trigger
+
+
+async def at_date(lat: float, lon: float, date: dt.date) -> dict:
+    """The trigger for a chosen day: live (forecast) for recent days, reconstructed from observed rain for older ones."""
+    today = dt.date.today()
+    if date >= today - dt.timedelta(days=LIVE_DAYS):
+        out = await current(lat, lon)
+        out["mode"] = "live"
+        if date != today:
+            out["notes"] = [f"Showing current conditions (live forecast); dates more than {LIVE_DAYS} days ago are "
+                            "reconstructed from observed rain."] + out["notes"]
+        return out
+    lat, lon = round(lat, 3), round(lon, 3)
+    rec_start = dt.date(BACKTEST["start_year"], 1, 1)
+    if date - dt.timedelta(days=10) >= rec_start:
+        # The same daily record the backtest uses (one cached download covers every day since 2001).
+        clim = await power.daily_climate(lat, lon, (rec_start - dt.timedelta(days=10)).isoformat(), today.isoformat())
+    else:
+        clim = await power._daily(lat, lon, (date - dt.timedelta(days=10)).isoformat(),
+                                  (date + dt.timedelta(days=2)).isoformat(), max_age_days=None)
+    rain, soil = clim["precip_mm"], clim["soil_wetness"]
+    d = pd.Timestamp(date)
+    base = {
+        "mode": "reconstructed",
+        "rules": {"watch": TRIGGER["watch"], "warning": TRIGGER["warning"]},
+        "sources": [{"name": "NASA POWER daily (PRECTOTCORR, GWETROOT)", "use": "observed rain and root-zone soil wetness",
+                     "licence": "NASA open data"}],
+        "errors": [],
+    }
+    if d not in rain.index or pd.isna(rain.get(d)):
+        return {**base, "level": "none", "fired": [], "available": False,
+                "inputs": {"fc24": None, "fc72": None, "ante7": None, "soil": None},
+                "windows": {"forecast_from": None, "observed_from": None, "observed_to": None, "unobserved_days_before_forecast": None},
+                "notes": ["NASA POWER has not published rain for this date yet (it lags a few days)."]}
+    nxt = rain.loc[d:d + pd.Timedelta(days=2)]
+    prev = rain.loc[d - pd.Timedelta(days=7):d - pd.Timedelta(days=1)]
+    x = {
+        "fc24": round(float(rain[d]), 1),
+        "fc72": round(float(nxt.sum()), 1) if len(nxt.dropna()) == 3 else None,
+        "ante7": round(float(prev.sum()), 1) if len(prev.dropna()) == 7 else None,
+        "soil": None if pd.isna(soil.get(d - pd.Timedelta(days=1))) else round(float(soil[d - pd.Timedelta(days=1)]), 2),
+    }
+    return {
+        **base, **evaluate(x), "available": True, "inputs": x,
+        "windows": {"forecast_from": None, "observed_from": (date - dt.timedelta(days=7)).isoformat(),
+                    "observed_to": (date - dt.timedelta(days=1)).isoformat(), "unobserved_days_before_forecast": None},
+        "notes": [
+            "Reconstructed: archived forecasts aren't available, so the rain that actually fell on this day and the next two "
+            "stands in for the 24 h and 72 h forecasts (as in the backtest).",
+            "NASA POWER rain is a ~50 km grid average; local storms can be missed or diluted.",
+        ],
+    }
+
+
 # ---------------------------------------------------------------- backtest
 
 def _distance_km(lat1, lon1, lat2, lon2) -> float:
@@ -188,7 +243,7 @@ async def backtest(lat: float, lon: float) -> dict:
     window = BACKTEST["match_days"]
     events = events_near(lat, lon, radius)
     start = dt.date(BACKTEST["start_year"], 1, 1)
-    clim = await power.daily_climate(lat, lon, (start - dt.timedelta(days=10)).isoformat(), dt.date.today().isoformat())
+    clim = await power.daily_climate(lat, lon, (start - dt.timedelta(days=10)).isoformat(), dt.date.today().isoformat())  # shared with at_date
     levels = hindcast(clim)
     last = levels.index.max().date()
     # Scoring period: the years the event lists cover (GLC export 2007-2017 plus any local reports), within the rain record.

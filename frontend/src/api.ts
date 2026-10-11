@@ -273,6 +273,9 @@ export type TriggerLevel = 'none' | 'watch' | 'warning'
 export interface TriggerInputs { fc24: number | null; fc72: number | null; ante7: number | null; soil: number | null }
 export type TriggerRule = Partial<Record<keyof TriggerInputs, number>>
 export interface Trigger {
+  /** live = forecast-based (recent days); reconstructed = observed rain stands in for the forecast (older days) */
+  mode?: 'live' | 'reconstructed'
+  available?: boolean
   level: TriggerLevel
   fired: TriggerRule[]
   inputs: TriggerInputs
@@ -307,11 +310,12 @@ export interface LossResult {
 }
 export type LossStatus = (
   | ({ status: 'done' } & LossResult)
-  | { status: 'running'; progress: number; started: number }
+  | { status: 'running' | 'queued'; progress: number; started: number }
   | { status: 'not_started' | 'unavailable' | 'error'; error?: string }
-) & { end?: string; overlay?: string; previous?: LossResult & { end: string } }
+) & { end?: string; latest?: boolean; overlay?: string; previous?: LossResult & { end: string } }
 export interface Screening {
   area: { lat: number; lon: number; half_km: number }
+  date: string
   notice: string
   official: OfficialLink[]
   susceptibility: Susceptibility
@@ -362,10 +366,10 @@ export const api = {
     get<ExplainResult>('/api/explain', p, signal),
   weather: (lat: number, lon: number, signal?: AbortSignal) => get<Forecast>('/api/weather', { lat, lon }, signal),
   events: (p: { lat: number; lon: number }, signal?: AbortSignal) => get<EventsResult>('/api/events', p, signal),
-  screening: (p: { lat: number; lon: number; country?: string }, signal?: AbortSignal) =>
-    get<Screening>('/api/screening', p.country ? p : { lat: p.lat, lon: p.lon }, signal),
-  forestLoss: (p: { lat: number; lon: number; half_km: number; end?: string }, signal?: AbortSignal) =>
-    get<LossStatus>('/api/screening/forest-loss', p.end ? p : { lat: p.lat, lon: p.lon, half_km: p.half_km }, signal),
+  screening: (p: { lat: number; lon: number; country?: string; date?: string }, signal?: AbortSignal) =>
+    get<Screening>('/api/screening', p, signal),
+  forestLoss: (p: { lat: number; lon: number; half_km: number; end: string; start?: boolean }, signal?: AbortSignal) =>
+    get<LossStatus>('/api/screening/forest-loss', { ...p, start: p.start ? 'true' : undefined }, signal),
   backtest: (lat: number, lon: number, signal?: AbortSignal) => get<Backtest>('/api/screening/backtest', { lat, lon }, signal),
   url: (path: string) => `${BASE}${path}`,
 }
