@@ -42,7 +42,8 @@ def _nearest_km(lat: float, lon: float, pts: list[tuple[float, float]]) -> float
     return min(math.hypot((p[0] - lat) * 110.6, (p[1] - lon) * 111.3 * k) for p in pts)
 
 
-def build(a: dict, grid, loss: dict | None, events: list[dict], area_center: tuple[float, float]) -> dict:
+def build(a: dict, grid, loss: dict | None, events: list[dict], area_center: tuple[float, float],
+          keep_all: bool = False) -> dict:
     s = susceptibility.score(a["slope"], a["hand"], a["landcover"])
     cell_ha = grid.dx_m * grid.dy_m / 10_000
     min_cells = math.ceil(P["min_site_ha"] / cell_ha)
@@ -123,7 +124,36 @@ def build(a: dict, grid, loss: dict | None, events: list[dict], area_center: tup
             site["rank"] = i + 1
             site["id"] = f"{prefix}{i + 1:02d}"
             out.append(site)
-    return {"sites": out, "total_sites": totals, "validation": validate(a, s, events, grid)}
+    res = {"sites": out, "total_sites": totals, "validation": validate(a, s, events, grid)}
+    if keep_all:
+        res["all_sites"] = sites
+    return res
+
+
+def sensitivity(all_sites: list[dict], top: int = 10, change: float = 0.2) -> dict:
+    """How stable is the ranking? Each weight in turn is scaled by (1 +/- change) and the top-`top` squares of each
+    kind are re-ranked; the result is how many of the original top `top` stay in the top `top`."""
+    w0 = P["weights"]
+
+    def top_ids(kind, w):
+        group = [x for x in all_sites if x["kind"] == kind]
+        group.sort(key=lambda x: -sum(w[k] * v for k, v in x["parts"].items()))
+        return {id(x) for x in group[:top]}
+
+    out = {}
+    for kind in ("slope", "stream corridor"):
+        base = top_ids(kind, w0)
+        if not base:
+            continue
+        kept = []
+        for k in w0:
+            for f in (1 - change, 1 + change):
+                kept.append(len(base & top_ids(kind, {**w0, k: w0[k] * f})))
+        out[kind] = {"top": min(top, len(base)), "perturbations": len(kept), "min_kept": min(kept),
+                     "mean_kept": round(sum(kept) / len(kept), 1)}
+    return {"weight_change": change, "by_kind": out,
+            "method": f"Each weight scaled by {1 - change:g} and {1 + change:g} in turn (others unchanged); count how many of "
+                      f"the original top {top} squares of each kind stay in the top {top}."}
 
 
 def _max_filter(cls: np.ndarray, r: int) -> np.ndarray:

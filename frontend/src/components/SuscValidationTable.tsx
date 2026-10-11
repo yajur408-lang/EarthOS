@@ -33,7 +33,7 @@ export default function SuscValidationTable({ v }: { v: SuscValidation }) {
       </div>
       <p>
         n = {v.events_usable} located landslides ({v.excluded_vague_location} more excluded for vague locations).
-        {chanceAllHigh != null && <> Because {pct(high!.area_share_within_100m)} of the land is within 100 m of a high cell, all {v.events_usable} would land there
+        {chanceAllHigh != null && <> Because {pct(high!.area_share_within_100m)} of the land is within 100 m of a high cell, {v.events_usable === 2 ? 'both' : v.events_usable === 1 ? 'it' : `all ${v.events_usable}`} would land there
           by chance {pct(chanceAllHigh)} of the time - <b>far too few events to show the map works</b>.</>}
         {v.missed.length > 0 && <> Missed (only "lower" within 100 m): {v.missed.map((m) => m.date).join(', ')}.</>}
       </p>

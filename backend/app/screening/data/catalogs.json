@@ -1,0 +1,17 @@
+{
+ "ibtracs": {
+  "built": "2026-10-10",
+  "source": "NOAA NCEI IBTrACS v04r01 since1980 CSV",
+  "points": 311480
+ },
+ "spc_tornadoes": {
+  "built": "2026-10-10",
+  "source": "NOAA SPC 1950-2025 actual tornadoes CSV",
+  "records": 73458
+ },
+ "glc_events": {
+  "built": "2026-10-10",
+  "source": "NASA Global Landslide Catalog export (data.gov legacy CSV), events 1988-2017",
+  "records": 11033
+ }
+}

@@ -88,5 +88,14 @@ if __name__ == "__main__":
             cyclones(c)
         if "tornadoes" in which:
             tornadoes(c)
+    import datetime as dt
+    import json
+    meta_path = OUT / "catalogs.json"
+    meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+    for name in ("cyclones", "tornadoes"):
+        if name in which:
+            key = "ibtracs" if name == "cyclones" else "spc_tornadoes"
+            meta.setdefault(key, {})["built"] = dt.date.today().isoformat()
+    meta_path.write_text(json.dumps(meta, indent=1))
     for f in OUT.glob("*.gz"):
         print(f.name, f"{f.stat().st_size / 1e6:.1f} MB")
