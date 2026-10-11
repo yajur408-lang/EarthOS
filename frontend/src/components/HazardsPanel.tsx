@@ -1,4 +1,4 @@
-import type { LossResult, LossStatus, Screening, SourceRef, SuscClass, Trigger, TriggerRule } from '../api'
+import type { LossResult, LossStatus, Screening, SourceRef, SuscClass, SuscMode, Trigger, TriggerRule } from '../api'
 import { linkProps } from '../router'
 import { prettyDate } from '../util'
 
@@ -10,6 +10,8 @@ interface Props {
   loss: LossStatus | null
   showSusc: boolean
   onShowSusc: (on: boolean) => void
+  suscMode: SuscMode
+  onSuscMode: (m: SuscMode) => void
   showLoss: boolean
   onShowLoss: (on: boolean) => void
   onFly: (lat: number, lon: number) => void
@@ -74,7 +76,7 @@ export default function HazardsPanel(p: Props) {
       {p.inspect}
       <TriggerSection t={d.trigger} lat={p.lat} lon={p.lon} />
       {p.natural}
-      <SusceptibilitySection d={d} show={p.showSusc} onShow={p.onShowSusc} />
+      <SusceptibilitySection d={d} show={p.showSusc} onShow={p.onShowSusc} mode={p.suscMode} onMode={p.onSuscMode} />
       <LossSection loss={p.loss} show={p.showLoss} onShow={p.onShowLoss} onFly={p.onFly} onRun={p.onRunLoss} />
     </div>
   )
@@ -152,7 +154,13 @@ function TriggerSection({ t, lat, lon }: { t: Trigger; lat: number; lon: number 
   )
 }
 
-function SusceptibilitySection({ d, show, onShow }: { d: Screening; show: boolean; onShow: (on: boolean) => void }) {
+const LEGEND: Record<SuscMode, string> = {
+  combined: 'larger of the two: faint yellow lower · orange medium · red high · grey unassessed · paler = uncertain · blue = drainage lines',
+  landslide: 'slope + land cover only: faint yellow lower · orange medium · red high · paler = uncertain',
+  flood: 'height above drainage only: pale blue lower · blue medium · dark blue high · grey unknown · paler = uncertain',
+}
+
+function SusceptibilitySection({ d, show, onShow, mode, onMode }: { d: Screening; show: boolean; onShow: (on: boolean) => void; mode: SuscMode; onMode: (m: SuscMode) => void }) {
   const s = d.susceptibility
   if (s.error) return <section className="hz"><h3>Susceptibility</h3><div className="alert soft">{s.error}</div></section>
   const at = s.at_point
@@ -164,6 +172,9 @@ function SusceptibilitySection({ d, show, onShow }: { d: Screening; show: boolea
           <b>At the pin: {CLASS_LABEL[at.class]}</b>
           {at.uncertain && (
             <span>Uncertain: within typical data error this could be {at.range[0] === at.range[1] ? at.range[0] : `${at.range[0]} to ${at.range[1]}`}.</span>
+          )}
+          {at.landslide_class && (
+            <span>Landslide: <b>{at.landslide_class}</b> · Flood: <b>{at.flood_class}</b>{at.driver ? ` · combined class driven by ${at.driver}` : ''}</span>
           )}
           <span>Slope {at.slope_deg}° · {at.hand_m == null ? 'drains out of the area before a drainage line' : `${at.hand_m} m above the nearest drainage line`} · {at.land_cover}</span>
         </div>
@@ -184,9 +195,17 @@ function SusceptibilitySection({ d, show, onShow }: { d: Screening; show: boolea
           <p className="hint">Unassessed (grey on the map): {pct(s.summary.unassessed_share!)} of the area, where water leaves the box before reaching a drainage line, so flood susceptibility is unknown.</p>
         )}
       </div>
+      <div className="seg" role="group" aria-label="Which hazard">
+        {(['combined', 'landslide', 'flood'] as SuscMode[]).map((m) => (
+          <button key={m} className={mode === m ? 'on' : ''} onClick={() => { onMode(m); onShow(true) }}>
+            {m === 'combined' ? 'Combined' : m === 'landslide' ? 'Landslide' : 'Flood'}
+            {d.susceptibility.summary.by_hazard && m !== 'combined' ? ` · ${Math.round((d.susceptibility.summary.by_hazard[m].high) * 100)}% high` : ''}
+          </button>
+        ))}
+      </div>
       <label className="toggle">
         <input type="checkbox" checked={show} onChange={(e) => onShow(e.target.checked)} />
-        <span>Show on the map <small>faint yellow lower · orange medium · red high · paler = uncertain · blue = drainage lines</small></span>
+        <span>Show on the map <small>{LEGEND[mode]}</small></span>
       </label>
       <Sources list={s.sources} method={s.method} limits={s.limits} />
     </section>

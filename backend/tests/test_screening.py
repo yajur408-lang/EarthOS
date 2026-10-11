@@ -306,3 +306,14 @@ def test_validation_compares_like_with_like():
     near = priority._max_filter(cls, 1)
     assert near.sum() == 2 * 9  # the single high cell reaches its 3x3 neighbourhood
     assert near[0, 0] == 0 and near[3, 3] == 2
+
+
+def test_landslide_and_flood_classes_are_separate():
+    slope = np.array([[40.0, 2.0]])
+    hand = np.array([[80.0, 0.5]])
+    lc = np.array([[30, 30]], dtype=np.uint8)
+    s = susceptibility.score(slope, hand, lc)
+    assert list(s["class"][0]) == [2, 2]  # combined: both "high"...
+    assert list(s["slide_class"][0]) == [2, 0] and list(s["flood_class"][0]) == [0, 2]  # ...for different reasons
+    pt = susceptibility.at(s, 0, 1, 2.0, 0.5, "Grassland")
+    assert pt["landslide_class"] == "lower" and pt["flood_class"] == "high" and pt["driver"] == "drainage (flood)"

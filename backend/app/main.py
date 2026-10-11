@@ -537,13 +537,14 @@ async def hazard_change_png(lat: float = LatQ, lon: float = LonQ, half_km: float
 
 
 @app.get("/api/screening/susceptibility.png")
-async def screening_susc_png(lat: float = LatQ, lon: float = LonQ, half_km: float = Query(..., ge=1, le=8)):
+async def screening_susc_png(lat: float = LatQ, lon: float = LonQ, half_km: float = Query(..., ge=1, le=8),
+                             mode: str = Query("combined", pattern="^(combined|landslide|flood)$")):
     from .screening import service
     clat, clon, h = service.snap(lat, lon, half_km)
-    path = service.DIR / f"susc{service.PNG_VERSION}_{service.area_key(clat, clon, h)}.png"
+    path = service.DIR / f"susc{service.PNG_VERSION}_{mode}_{service.area_key(clat, clon, h)}.png"
     if not path.exists():
         a = await service.area(clat, clon, h)
-        png = await asyncio.to_thread(service.susceptibility_png, a)
+        png = await asyncio.to_thread(service.susceptibility_png, a, mode)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(png)
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})

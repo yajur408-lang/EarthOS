@@ -249,6 +249,7 @@ async function get<T>(path: string, params?: Record<string, string | number | un
 export interface SourceRef { name: string; use?: string; licence?: string; citation?: string; url?: string }
 export interface OfficialLink { name: string; url: string }
 export type SuscClass = 'lower' | 'medium' | 'high'
+export type SuscMode = 'combined' | 'landslide' | 'flood'
 export interface Susceptibility {
   bounds: { west: number; east: number; south: number; north: number }
   cell_m: number
@@ -258,9 +259,11 @@ export interface Susceptibility {
     unassessed_share?: number
     hand_unknown_share?: number
     slope_driven_share_of_high: number
+    by_hazard?: { landslide: Record<SuscClass, number>; flood: Record<SuscClass | 'unknown', number> }
   }
   at_point: {
-    class: SuscClass | 'unassessed'; uncertain: boolean; range: [SuscClass, SuscClass]
+    class: SuscClass | 'unassessed'; uncertain: boolean
+    landslide_class?: SuscClass; flood_class?: SuscClass | 'unknown'; driver?: string; range: [SuscClass, SuscClass]
     landslide_points: number; flood_points: number; slope_deg: number; hand_m: number | null; land_cover: string
   } | null
   terrain: { elevation_m: [number, number]; steep_share: number; drainage_share: number }

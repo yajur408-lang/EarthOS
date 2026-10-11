@@ -125,15 +125,24 @@ async def susceptibility_result(lat: float, lon: float, half_km: float, at: tupl
     }
 
 
-def susceptibility_png(a: dict) -> bytes:
+def susceptibility_png(a: dict, mode: str = "combined") -> bytes:
+    """Overlay image. mode: combined (larger of the two), landslide (slope + land cover) or flood (HAND)."""
     s = susceptibility.score(a["slope"], a["hand"], a["landcover"])
     colors = np.array([[250, 204, 21, 45], [245, 124, 0, 165], [211, 47, 47, 200]], dtype=np.uint8)
-    rgba = colors[s["class"]].copy()
+    if mode == "landslide":
+        cls, unassessed = s["slide_class"], np.zeros(s["class"].shape, dtype=bool)
+    elif mode == "flood":
+        cls, unassessed = np.maximum(s["flood_class"], 0), s["flood_class"] < 0
+        colors = np.array([[147, 197, 253, 45], [59, 130, 246, 150], [30, 64, 175, 200]], dtype=np.uint8)
+    else:
+        cls, unassessed = s["class"], s["unassessed"]
+    rgba = colors[cls].copy()
     # Uncertain cells (class could change within typical input error) are drawn paler.
     unc = s["uncertain"]
     rgba[unc, 3] = (rgba[unc, 3] * 0.5).astype(np.uint8)
-    rgba[s["unassessed"]] = [128, 128, 128, 110]  # drainage unknown: grey, never the "lower" yellow
-    rgba[a["stream"]] = [30, 136, 229, 200]
+    rgba[unassessed] = [128, 128, 128, 110]  # drainage unknown: grey, never the "lower" colour
+    if mode != "landslide":
+        rgba[a["stream"]] = [30, 136, 229, 200]
     rgba[a["landcover"] == 80] = [0, 0, 0, 0]
     return _png(rgba)
 

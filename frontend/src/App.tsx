@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type AnomalyEvent, type EventsResult, type HazardEvent, type HazardEvents, type HazardType, type InspectSite, type Priority, type Place, type Series, type StreetImage, type StreetNearby } from './api'
+import { api, type AnomalyEvent, type EventsResult, type HazardEvent, type HazardEvents, type HazardType, type InspectSite, type Priority, type SuscMode, type Place, type Series, type StreetImage, type StreetNearby } from './api'
 import DateBar, { type CompareState } from './components/DateBar'
 import type { GlobeHandle, LayerSpec, Marker, ViewState } from './components/Globe'
 import LayersPanel from './components/LayersPanel'
@@ -191,6 +191,7 @@ export default function App() {
   const street = useFetch<StreetNearby>(pointKey, (s) => api.street(pLat!, pLon!, s))
   // Hazard screening: loads with the Hazards tab, or while one of its map layers is on.
   const [hazardLayers, setHazardLayers] = useState({ susc: pilot, loss: pilot })
+  const [suscMode, setSuscMode] = useState<SuscMode>('combined')
   const screening = useScreening(place, tab === 'hazards' || hazardLayers.susc || hazardLayers.loss, date)
   // Natural hazards near the place (all years, or around the date bar's day) and a 30 m before/after check.
   const [hazAround, setHazAround] = useState(false)
@@ -306,7 +307,7 @@ export default function App() {
     }
     const scr = screening.data
     if (scr && hazardLayers.susc && !scr.susceptibility.error) {
-      out.push({ layerId: 'screen-susc', image: { url: api.url(scr.overlay), ...scr.susceptibility.bounds,
+      out.push({ layerId: 'screen-susc', image: { url: api.url(`${scr.overlay}&mode=${suscMode}`), ...scr.susceptibility.bounds,
         credit: 'EarthOS susceptibility: Terrain Tiles (SRTM), ESA WorldCover 2021 (CC BY 4.0)' } })
     }
     const loss = screening.loss
@@ -326,7 +327,7 @@ export default function App() {
       out.push({ layerId: id, date, alpha: layerById(id).credit ? 1 : opacity })
     }
     return out
-  }, [base, date, overlays, opacity, compare, sharpOn, sharp.pass, sharp.fill, screening.data, screening.loss, hazardLayers, change.status, showChange])
+  }, [base, date, overlays, opacity, compare, sharpOn, sharp.pass, sharp.fill, screening.data, screening.loss, hazardLayers, change.status, showChange, suscMode])
 
   // Markers: photo locations on the Street tab, events/earthquakes on the News tab.
   const markers = useMemo<Marker[]>(() => {
@@ -479,6 +480,7 @@ export default function App() {
           hazards={(
             <HazardsPanel data={screening.data} loading={screening.loading} error={screening.error} retry={screening.retry}
               loss={screening.loss} lat={place.lat} lon={place.lon}
+              suscMode={suscMode} onSuscMode={setSuscMode}
               showSusc={hazardLayers.susc} onShowSusc={(on) => {
                 setHazardLayers((h) => ({ ...h, susc: on }))
                 const b = screening.data?.susceptibility.bounds

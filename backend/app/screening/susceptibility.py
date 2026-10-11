@@ -51,7 +51,9 @@ def score(slope: np.ndarray, hand: np.ndarray, lc: np.ndarray) -> dict:
     near = (lo != cls) | (hi != cls) | hand_unknown
     driver = np.where(slide >= flood, 0, 1)  # 0 = slope-driven, 1 = drainage-driven
     return {"slide": slide, "flood": flood, "combined": combined, "class": cls, "uncertain": near,
-            "low": lo, "high": hi, "driver": driver, "hand_unknown": hand_unknown, "unassessed": unassessed}
+            "low": lo, "high": hi, "driver": driver, "hand_unknown": hand_unknown, "unassessed": unassessed,
+            # Landslide and flood are different hazards with different responses: each also gets its own class.
+            "slide_class": _classify(slide), "flood_class": np.where(hand_unknown, -1, _classify(flood))}
 
 
 def summary(s: dict, inside: np.ndarray) -> dict:
@@ -68,6 +70,11 @@ def summary(s: dict, inside: np.ndarray) -> dict:
         # Drainage couldn't be traced and the slope part alone says "lower": shown as unassessed, not lower.
         "unassessed_share": round(float(una.sum()) / n, 3),
         "hand_unknown_share": round(float(s["hand_unknown"][inside].sum()) / n, 3),
+        "by_hazard": {
+            "landslide": {name: round(float((s["slide_class"][inside] == k).sum()) / n, 3) for k, name in enumerate(CLASSES)},
+            "flood": {**{name: round(float((s["flood_class"][inside] == k).sum()) / n, 3) for k, name in enumerate(CLASSES)},
+                      "unknown": round(float((s["flood_class"][inside] == -1).sum()) / n, 3)},
+        },
         "slope_driven_share_of_high": round(float(((cls == 2) & (s["driver"][inside] == 0)).sum()) / max(int((cls == 2).sum()), 1), 3),
     }
 
@@ -79,6 +86,9 @@ def at(s: dict, r: int, c: int, slope: float, hand: float, lc_name: str) -> dict
         "class": "unassessed" if s["unassessed"][r, c] else CLASSES[k],
         "uncertain": bool(s["uncertain"][r, c]),
         "range": [CLASSES[int(s["low"][r, c])], CLASSES[int(s["high"][r, c])]],
+        "landslide_class": CLASSES[int(s["slide_class"][r, c])],
+        "flood_class": "unknown" if s["flood_class"][r, c] < 0 else CLASSES[int(s["flood_class"][r, c])],
+        "driver": "slope (landslide)" if s["driver"][r, c] == 0 else "drainage (flood)",
         "landslide_points": float(s["slide"][r, c]),
         "flood_points": float(s["flood"][r, c]),
         "slope_deg": round(slope, 1),
