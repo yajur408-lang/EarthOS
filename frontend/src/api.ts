@@ -352,6 +352,8 @@ export interface Backtest {
   caveats: string[]
   sources: SourceRef[]
   notice: string
+  /** False outside the Santa Ana pilot: thresholds weren't set or validated here. */
+  calibrated?: boolean
 }
 
 // ---------- natural hazards near a place ----------
@@ -422,6 +424,7 @@ export interface Priority {
   rainfall: { available: boolean; window?: [string, string]; rain_mm?: number; normal_mm?: number | null; percent_of_normal?: number | null; years_compared?: number; note?: string }
   evidence: { layer: string; source: string; date: string; resolution: string }[]
   forest_loss_used: boolean
+  calibrated?: boolean
   weights: Record<string, number>
   method: string
   notice: string

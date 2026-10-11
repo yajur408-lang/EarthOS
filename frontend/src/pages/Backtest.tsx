@@ -51,6 +51,10 @@ export default function Backtest() {
         {res.error && <p className="note">Backtest unavailable: {res.error}</p>}
         {d && (
           <>
+            {d.calibrated === false && (
+              <p className="uncalibrated"><b>Uncalibrated here.</b> These thresholds were set for the Santa Ana pilot. The scores below show how
+                they would have done at this place, but no thresholds were chosen or checked for its climate.</p>
+            )}
             <p className="muted">
               Landslides reported within {d.place.radius_km} km, {prettyDate(d.period[0])} – {prettyDate(d.period[1])}.
               A hit means an alert was active within ±{d.match_days} day{d.match_days === 1 ? '' : 's'} of the reported date.

@@ -17,7 +17,7 @@ export default function Landing() {
     <PageShell>
       <section className="hero">
         <div className="hero-text">
-          <p className="eyebrow">Pilot: Santa Ana, Costa Rica · works anywhere on Earth</p>
+          <p className="eyebrow">Pilot: Santa Ana, Costa Rica · the layers run anywhere; thresholds are calibrated only for the pilot</p>
           <h1>Landslide and flash-flood screening from open satellite data.</h1>
           <p className="lead">
             EarthOS maps which slopes and stream corridors are more susceptible, watches steep forest for possible loss, and
@@ -60,7 +60,7 @@ export default function Landing() {
 
       <section className="places">
         <h2>Explore</h2>
-        <p className="muted">These places are pre-loaded, so they open instantly. Anywhere else on Earth works too: click the globe and open the Hazards tab.</p>
+        <p className="muted">These places are pre-loaded, so they open instantly. Other places work too (click the globe, open the Hazards tab), but the rainfall thresholds and weights were set for Santa Ana and are not validated elsewhere; those results carry an "uncalibrated here" label.</p>
         <div className="place-grid">
           {FEATURED.map((p) => (
             <a key={p.id} className="place" {...linkProps(p.href)}>

@@ -402,6 +402,12 @@ def _official_links(country: str | None) -> list[dict]:
     return links
 
 
+def _in_pilot(lat: float, lon: float) -> bool:
+    """Inside the Santa Ana pilot box, where the rainfall thresholds were set (they aren't validated elsewhere)."""
+    from .places import PILOT
+    return abs(lat - PILOT["lat"]) <= PILOT["screen_km"] / 110.6 and abs(lon - PILOT["lon"]) <= PILOT["screen_km"] / 109.0
+
+
 def _screen_area(lat: float, lon: float, half_km: float | None):
     from .places import PILOT
     from .screening import service
@@ -432,7 +438,8 @@ async def screening(lat: float = LatQ, lon: float = LonQ, half_km: float | None 
         "official": _official_links(country),
         "susceptibility": susc if not isinstance(susc, Exception) else {"error": f"{type(susc).__name__}: {susc}"},
         "overlay": f"/api/screening/susceptibility.png?lat={clat}&lon={clon}&half_km={h}&v={service.PNG_VERSION}",
-        "trigger": trig if not isinstance(trig, Exception) else {"error": f"{type(trig).__name__}: {trig}"},
+        "trigger": ({**trig, "calibrated": _in_pilot(lat, lon)} if not isinstance(trig, Exception)
+                    else {"error": f"{type(trig).__name__}: {trig}"}),
         "forest_loss": _loss_payload(clat, clon, h, day, start=None),
     }
 
@@ -479,6 +486,7 @@ async def screening_priority(lat: float = LatQ, lon: float = LonQ, half_km: floa
         rain = {"available": False, "error": f"{type(e).__name__}"}
     return {**res, "area": {"lat": clat, "lon": clon, "half_km": h}, "bounds": g.bounds(),
             "rainfall": rain, "evidence": priority.evidence(loss), "forest_loss_used": bool(loss),
+            "calibrated": _in_pilot(lat, lon),
             "weights": priority.P["weights"], "settings": {k: v for k, v in priority.P.items() if k != "weights"},
             "method": priority.METHOD, "notice": SCREENING_NOTICE}
 
@@ -569,13 +577,13 @@ async def screening_loss_png(lat: float = LatQ, lon: float = LonQ, half_km: floa
 @app.get("/api/screening/trigger")
 async def screening_trigger(lat: float = LatQ, lon: float = LonQ):
     from .screening import trigger
-    return {**(await trigger.current(lat, lon)), "notice": SCREENING_NOTICE}
+    return {**(await trigger.current(lat, lon)), "calibrated": _in_pilot(lat, lon), "notice": SCREENING_NOTICE}
 
 
 @app.get("/api/screening/backtest")
 async def screening_backtest(lat: float = LatQ, lon: float = LonQ):
     from .screening import trigger
-    return {**(await trigger.backtest(round(lat, 3), round(lon, 3))), "notice": SCREENING_NOTICE}
+    return {**(await trigger.backtest(round(lat, 3), round(lon, 3))), "calibrated": _in_pilot(lat, lon), "notice": SCREENING_NOTICE}
 
 
 analysis_sources = {

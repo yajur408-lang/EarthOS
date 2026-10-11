@@ -35,6 +35,10 @@ export default function InspectionList(p: Props) {
         <button className={p.kind === 'slope' ? 'on' : ''} onClick={() => p.onKind('slope')}>Slopes · landslides ({d.total_sites.slope})</button>
         <button className={p.kind === 'stream corridor' ? 'on' : ''} onClick={() => p.onKind('stream corridor')}>Streams · flash floods ({d.total_sites['stream corridor']})</button>
       </div>
+      {d.calibrated === false && (
+        <p className="uncalibrated"><b>Uncalibrated here.</b> The weights and thresholds behind this ranking were chosen for the Santa Ana pilot; use it only as a rough first pass.</p>
+      )}
+      <p className="hint">A prioritisation aid for field checks, not a hazard map: a high rank means "look here first", not "dangerous".</p>
       {d.rainfall.available && (
         <p className={`rain-context ${(d.rainfall.percent_of_normal ?? 0) >= 150 ? 'wet' : ''}`}>
           Rain over the last 30 days ({prettyDate(d.rainfall.window![0])} – {prettyDate(d.rainfall.window![1])}): <b>{d.rainfall.rain_mm} mm</b>

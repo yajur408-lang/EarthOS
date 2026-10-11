@@ -42,3 +42,9 @@ def test_featured_places_are_costa_rica_and_others_span_continents():
     places = TestClient(main.app).get("/api/places").json()
     assert {p["country"] for p in places if p.get("featured")} == {"Costa Rica"}
     assert len({p["country"] for p in places}) >= 4
+
+
+def test_calibrated_only_inside_the_pilot():
+    from app.main import _in_pilot
+    assert _in_pilot(9.915, -84.19) and _in_pilot(9.95, -84.15)
+    assert not _in_pilot(29.95, -85.42) and not _in_pilot(9.915, -83.9)
