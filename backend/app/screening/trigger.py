@@ -343,7 +343,25 @@ def baselines(levels: pd.DataFrame, events: list[dict], min_level: int, window: 
     return out
 
 
+_bt_cache: dict[tuple, tuple[float, dict]] = {}
+
+
 async def backtest(lat: float, lon: float) -> dict:
+    """Cached for 6 h per place: the baseline Monte Carlo is slow on a small host, and its inputs change weekly."""
+    import copy
+    import time
+    key = (round(lat, 3), round(lon, 3))
+    hit = _bt_cache.get(key)
+    if hit and time.time() - hit[0] < 6 * 3600:
+        return copy.deepcopy(hit[1])
+    res = await _backtest(lat, lon)
+    if len(_bt_cache) > 200:
+        _bt_cache.clear()
+    _bt_cache[key] = (time.time(), res)
+    return copy.deepcopy(res)
+
+
+async def _backtest(lat: float, lon: float) -> dict:
     radius = BACKTEST["radius_km"]
     window = BACKTEST["match_days"]
     events = events_near(lat, lon, radius)

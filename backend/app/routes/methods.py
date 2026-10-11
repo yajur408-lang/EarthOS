@@ -12,8 +12,24 @@ from .. import analysis
 router = APIRouter()
 
 
+_cache: dict = {}  # {"at": time, "ttl": seconds, "task": asyncio.Task}
+
+
 @router.get("/api/methods")
 async def methods_info():
+    """Cached: the backtest baselines, sensitivity check and ranking take ~15 s on a small host. Recomputed every 6 h,
+    or after 10 min while the forest-loss result isn't ready yet (so the ranking check picks it up)."""
+    import time
+    hit = _cache.get("task")
+    if hit is None or (hit.done() and time.time() - _cache["at"] > _cache.get("ttl", 0)):
+        _cache.update(task=asyncio.ensure_future(_compute()), at=time.time(), ttl=600)
+        hit = _cache["task"]
+    res = await asyncio.shield(hit)
+    _cache["ttl"] = 6 * 3600 if res["ranking_sensitivity"]["forest_loss_included"] else 600
+    return res
+
+
+async def _compute():
     """Everything the Methods page shows, straight from config and code (so the page can't drift from them)."""
     import json as _json
     from pathlib import Path as _P

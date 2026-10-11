@@ -80,6 +80,9 @@ async def _prewarm():
                 if service.loss_ready():
                     service.start_loss(clat, clon, h, service.default_loss_end())
             log.info("prewarmed %s", pid)
+            if p.get("pilot"):
+                from .routes.methods import methods_info
+                await methods_info()  # the Methods and landing pages read this; compute it before the first visitor
         except Exception as e:  # best effort: a slow upstream must never block startup
             log.warning("prewarm %s failed: %s", pid, e)
 
