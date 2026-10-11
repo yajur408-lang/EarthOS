@@ -164,7 +164,7 @@ def _png(rgba: np.ndarray) -> bytes:
 
 # ------------------------------------------------------------------ forest loss (background job)
 
-LOSS_VERSION = 4  # bump to recompute stored forest-loss results
+LOSS_VERSION = 5  # bump to recompute stored forest-loss results
 
 
 def loss_key(lat: float, lon: float, half_km: float, end: dt.date) -> str:

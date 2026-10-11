@@ -135,3 +135,8 @@ def test_cog_reads_striped_tiffs_deflate_and_lzw():
         assert f.tile_w == 200 and f.origin_x == 500000.0
         assert np.array_equal(win, arr[40:260, 10:150]), comp
         assert pts[0] == arr[123, 7]
+
+
+def test_zone_from_mgrs_tile():
+    assert forest_loss._zone_from_tile("16PGR") == (16, True)
+    assert forest_loss._zone_from_tile("19HCD") == (19, False)

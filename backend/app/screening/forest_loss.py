@@ -97,7 +97,7 @@ async def _read_granule(client, g: dict, lat2: np.ndarray, lon2: np.ndarray, hea
     if not url:
         return None
     n = await cog.open_cog(client, url, headers)
-    zone, north = utm.from_epsg(n.epsg)
+    zone, north = utm.from_epsg(n.epsg) if n.epsg else _zone_from_tile(g.get("tile"))
     x, y = utm.forward(lat2, lon2, zone, north)
     fc, fr = n.pixel(x, y)
     inside = (fc >= 0) & (fr >= 0) & (fc < n.width) & (fr < n.height)
@@ -166,6 +166,13 @@ def cap_per_year(granules: list[dict]) -> list[dict]:
     for gs in by_year.values():
         out += sorted(gs, key=lambda g: g["cloud"])[:MAX_SCENES_PER_YEAR]
     return out
+
+
+def _zone_from_tile(tile: str | None) -> tuple[int, bool]:
+    """UTM zone from an MGRS tile id such as '16PGR' (some HLS files omit the EPSG geokey)."""
+    if not tile or len(tile) < 3 or not tile[:2].isdigit():
+        raise cog.CogError("no projection in the file and no MGRS tile id")
+    return int(tile[:2]), tile[2].upper() >= "N"
 
 
 def _patches(mask: np.ndarray, min_cells: int) -> list[list[tuple[int, int]]]:
