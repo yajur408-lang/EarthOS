@@ -73,3 +73,32 @@ exposure_radius_m = 300      # built-up land within this distance counts as expo
 loss_radius_m = 150          # a forest-loss patch this close adds the "recent vegetation loss" factor
 history_radius_m = 1000      # a reported landslide (location +/-1 km or better) this close adds the "history" factor
 weights = { susceptibility = 0.35, exposure = 0.30, recent_loss = 0.15, history = 0.10, size = 0.10 }
+
+# ---------------------------------------------------------------------------------------------------------------
+# Where these numbers come from. origin: "judgment" (chosen by the author, not fitted or cited), "convention"
+# (standard statistical practice), "product docs" (the data provider's documentation), "literature" (a published
+# threshold, cited), "user choice" (set by the project owner). Nothing here was fitted to the validation events.
+[provenance]
+"area.grid_arcsec" = { origin = "product docs", note = "SRTM 1 arc-second (~30 m) is the native resolution of the terrain." }
+"area.buffer_km" = { origin = "judgment", note = "Enough extra terrain that drainage routing rarely reaches the edge (0% unknown HAND in the pilot)." }
+"forest_loss.min_patch_ha" = { origin = "user choice", note = "0.5 ha chosen by the project owner (about 6 HLS pixels)." }
+"forest_loss.min_slope_deg" = { origin = "judgment", note = "Matches the lowest landslide slope class; the brief asked for slopes > 15 deg." }
+"forest_loss.ndvi_drop" = { origin = "judgment", note = "Large enough to exceed typical HLS NDVI noise between clear views." }
+"forest_loss.robust_z" = { origin = "convention", note = "2 robust sigmas, as in the anomaly detector; sigma = 1.4826 x MAD (consistent with a normal SD)." }
+"forest_loss.fmask_reject_bits" = { origin = "product docs", note = "HLS v2 user guide Fmask bit definitions." }
+"susceptibility.slope_breaks_deg" = { origin = "judgment", note = "Round-number classes; not taken from a calibrated landslide model." }
+"susceptibility.landcover_points" = { origin = "judgment", note = "Trees stabilise slopes, bare/built/grass less so; sizes of the adjustments are not calibrated." }
+"susceptibility.hand_breaks_m" = { origin = "judgment", note = "Low height above drainage floods first; break values not calibrated for local rivers." }
+"susceptibility.stream_area_km2" = { origin = "judgment", note = "Chosen to give a plausible-looking network; not checked against mapped streams." }
+"susceptibility.medium_from" = { origin = "judgment", note = "Class cut-offs on the 0-3 points scale." }
+"susceptibility.slope_error_deg" = { origin = "judgment", note = "Typical slope error of a 30 m DEM in moderate relief; not measured here." }
+"susceptibility.hand_error_m" = { origin = "judgment", note = "Typical SRTM vertical error carried into HAND; not measured here." }
+"trigger.watch" = { origin = "judgment", note = "Starting values for the Santa Ana pilot, set before scoring; not official criteria, not fitted." }
+"trigger.warning" = { origin = "judgment", note = "As above. The backtest shows they do no better than a rain-only threshold at the same frequency." }
+"backtest.match_days" = { origin = "judgment", note = "Reported landslide dates are often a day off." }
+"backtest.radius_km" = { origin = "judgment", note = "About half a NASA POWER rain cell." }
+"priority.weights" = { origin = "judgment", note = "Not tuned; a +/-20% sensitivity check is reported on the Methods page." }
+"priority.block_m" = { origin = "judgment", note = "Small enough for a team to walk in one visit." }
+"change.NBR" = { origin = "literature", note = "dNBR >= 0.27 is 'moderate' burn severity (Key & Benson 2006, FIREMON)." }
+"change.NDWI" = { origin = "judgment", note = "Index from McFeeters (1996); the 0.2 rise threshold is not from the literature." }
+"anomaly.z" = { origin = "convention", note = "|z| >= 2 with sigma = 1.4826 x MAD; false-flag rate estimated on the Methods page." }
