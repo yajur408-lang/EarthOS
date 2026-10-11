@@ -173,3 +173,37 @@ def test_change_run_end_to_end_with_synthetic_scenes(monkeypatch):
     assert len(res["patches"]) == 1 and res["patches"][0]["pixels"] == 100
     assert res["patches"][0]["label"].endswith("cause unconfirmed")
     assert res["mask"].sum() == 100
+
+
+def test_backtest_lists_missed_events():
+    days = pd.date_range("2010-01-01", "2010-12-31")
+    clim = pd.DataFrame({"precip_mm": pd.Series(0.0, index=days), "soil_wetness": 0.5})
+    levels = trigger.hindcast(clim)
+    s = trigger.score(levels, [{"date": "2010-03-01", "rain_triggered": True, "title": "dry-day slide"}], 1, 1,
+                      (dt.date(2010, 1, 1), dt.date(2010, 12, 31)))
+    assert s["misses"] == 1 and s["missed_events"][0]["title"] == "dry-day slide"
+
+
+def test_priority_squares_reasons_and_validation():
+    from app.screening import priority
+
+    n = 40
+    lat = 10.0 - (np.arange(n) + 0.5) / 3600
+    lon = -84.0 + (np.arange(n) + 0.5) / 3600
+    grid = terrain_grid.Grid(lat, lon, 1 / 3600)
+    slope = np.full((n, n), 5.0)
+    slope[:10, :10] = 40.0  # one steep square in the north-west corner
+    hand = np.full((n, n), 50.0)
+    lc = np.full((n, n), 10, dtype=np.uint8)
+    lc[:10, 10:18] = 50  # houses next to it
+    a = {"lat": lat, "lon": lon, "slope": slope, "hand": hand, "landcover": lc}
+    slide = {"date": "2015-01-01", "title": "test slide", "lat": float(lat[4]), "lon": float(lon[4]),
+             "accuracy": "exact", "origin": "test"}
+    res = priority.build(a, grid, None, [slide], (10.0, -84.0))
+    slopes = [s for s in res["sites"] if s["kind"] == "slope"]
+    assert slopes and slopes[0]["id"] == "L01"
+    assert any("steep ground" in r for r in slopes[0]["reasons"])
+    assert any("built-up" in r for r in slopes[0]["reasons"])
+    assert slopes[0]["parts"]["history"] == 1.0
+    v = res["validation"]
+    assert v["events_usable"] == 1 and v["share_in_high"] == 1.0 and v["missed"] == []

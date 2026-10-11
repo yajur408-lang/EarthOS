@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api, type Backtest as BT, type TriggerRule } from '../api'
+import { api, type Backtest as BT, type Priority, type TriggerRule } from '../api'
 import { linkProps, navigate } from '../router'
 import { useFetch } from '../useFetch'
 import { prettyDate } from '../util'
@@ -21,6 +21,8 @@ export default function Backtest() {
   const [at, setAt] = useState(readParams)
   const [form, setForm] = useState({ lat: String(at.lat), lon: String(at.lon) })
   const res = useFetch<BT>(`${at.lat},${at.lon}`, (s) => api.backtest(at.lat, at.lon, s))
+  const prio = useFetch<Priority>(`${at.lat},${at.lon}`, (s) => api.priority(at.lat, at.lon, s))
+  const v = prio.data?.validation
   const isPilot = Math.abs(at.lat - SANTA_ANA.lat) < 0.03 && Math.abs(at.lon - SANTA_ANA.lon) < 0.03
   const d = res.data
 
@@ -58,7 +60,7 @@ export default function Backtest() {
                 <div key={s.level} className="bt-score">
                   <h3>{s.level === 'watch' ? 'Watch or Warning' : 'Warning only'}</h3>
                   <div className="big">{pct(s.hit_rate)}</div>
-                  <p>hit rate: {s.hits} of {s.events} rain-triggered landslides</p>
+                  <p>hit rate: {s.hits} of {s.events} rain-triggered landslides · <b>missed {s.misses}</b></p>
                   <div className="big">{pct(s.false_alarm_rate)}</div>
                   <p>false-alarm rate: {s.false_alarms} of {s.alert_episodes} alert episodes had no reported landslide</p>
                   <p>{s.alert_days_per_year} alert days per year on average</p>
@@ -66,6 +68,14 @@ export default function Backtest() {
               ))}
             </div>
             {d.events.length === 0 && <p>No landslides are recorded within {d.place.radius_km} km in the catalogues used, so the rules cannot be scored here.</p>}
+
+            {d.scores[0]?.missed_events.length > 0 && (
+              <>
+                <h2>Missed events (no Watch within ±{d.match_days} day{d.match_days === 1 ? '' : 's'})</h2>
+                <ul>{d.scores[0].missed_events.map((m) => <li key={m.date + m.title}>{m.date} · {m.title}</li>)}</ul>
+                <p className="muted">See the rain columns below: a slide reported on a day with little rain in the ~50 km NASA POWER cell can't be caught by rainfall rules at this resolution.</p>
+              </>
+            )}
 
             <h2>Events</h2>
             <div className="bt-table-wrap">
@@ -95,6 +105,21 @@ export default function Backtest() {
                 </tbody>
               </table>
             </div>
+
+            <h2>Susceptibility map vs past landslide locations</h2>
+            {!v ? <p className="muted">{prio.loading ? 'Checking…' : prio.error ?? ''}</p> : v.events_usable === 0 ? (
+              <p>None of the {v.events_in_area} reported landslides inside the screening area has a location accurate to 1 km or better, so the map can't be checked against history here.</p>
+            ) : (
+              <>
+                <p>
+                  Of {v.events_usable} located landslides in the {prio.data!.area.half_km * 2} × {prio.data!.area.half_km * 2} km area, <b>{Math.round((v.share_in_high ?? 0) * 100)}%</b> fall within 100 m of a high-susceptibility cell
+                  ({Math.round(v.area_share.high * 100)}% of the area is high) and <b>{Math.round((v.share_in_medium_or_high ?? 0) * 100)}%</b> within 100 m of medium or high
+                  ({Math.round((v.area_share.high + v.area_share.medium) * 100)}% of the area). {v.excluded_vague_location} more were excluded for vague locations.
+                  {v.missed.length ? ` Missed (only 'lower' within 100 m): ${v.missed.map((m) => m.date).join(', ')}.` : ' None fell only in "lower" cells.'}
+                </p>
+                <p className="muted">{v.caveat}</p>
+              </>
+            )}
 
             <h2>Rules tested</h2>
             <ul>

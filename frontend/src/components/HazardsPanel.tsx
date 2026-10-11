@@ -16,6 +16,8 @@ interface Props {
   onRunLoss: () => void
   /** "Natural hazards near here" (built by the app, which owns the map). */
   natural?: React.ReactNode
+  /** "Where to inspect first" (built by the app). */
+  inspect?: React.ReactNode
   lat: number
   lon: number
 }
@@ -65,6 +67,7 @@ export default function HazardsPanel(p: Props) {
     <div className="hazards">
       <Notice d={d} />
       <p className="hz-date">Screening for <b>{prettyDate(d.date)}</b> · change the day with the date bar</p>
+      {p.inspect}
       <TriggerSection t={d.trigger} lat={p.lat} lon={p.lon} />
       {p.natural}
       <SusceptibilitySection d={d} show={p.showSusc} onShow={p.onShowSusc} />

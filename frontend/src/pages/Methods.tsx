@@ -41,14 +41,22 @@ export default function Methods() {
           <li>Catalogues only include landslides that made the news, so some "false alarms" are probably unreported slides; real forecasts are less accurate than observed rain, so real hit rates would be lower. <a {...linkProps('/backtest')}>See the backtest</a>.</li>
         </ul>
 
-        <h3>A5. Natural hazards near a place</h3>
+        <h3>A5. Where to inspect first</h3>
+        <ul>
+          <li>The area is cut into 250 m squares; a square is listed if it holds at least 1 ha of high susceptibility. Slopes (landslides, L01…) and stream corridors (flash floods, F01…) are ranked separately because their scores aren't comparable.</li>
+          <li>Score = 0.35 × susceptibility + 0.30 × buildings within 300 m (WorldCover built-up share × 2, capped at 1) + 0.15 × a forest-loss patch within 150 m + 0.10 × a reported landslide (located to 1 km or better) within 1 km + 0.10 × the share of the square that is high. Weights are in <code>screening.toml</code>.</li>
+          <li>Rain over the last 30 days vs the same weeks in other years is reported for the whole area (NASA POWER cells are ~50 km, so it can't separate squares).</li>
+          <li>The susceptibility map is checked against past landslides: the share of located landslides within 100 m of high or medium cells, compared with those classes' share of the area; landslides in "lower" cells are listed as missed.</li>
+          <li>Field sheets (print, CSV, GeoJSON) carry the ranking and reasons; imported findings report signs seen per kind and in the top vs lower half of each list.</li>
+        </ul>
+        <h3>A6. Natural hazards near a place</h3>
         <ul>
           <li><b>Tropical cyclones:</b> NOAA IBTrACS 6-hourly best-track centres since 1980, within 200 km; the closest approach and the strongest winds within that radius (Saffir-Simpson category from the wind speed).</li>
           <li><b>Tornadoes:</b> NOAA Storm Prediction Center paths since 1950 (United States only), within 40 km of the straight start-end path, with (E)F rating, length, width and reported casualties.</li>
           <li><b>Earthquakes:</b> USGS ComCat, magnitude 4.5+, within 150 km. <b>Wildfires, volcanoes, floods, storms, drought:</b> NASA EONET (about 2015 onwards), within 100 km. <b>Landslides:</b> as in the backtest.</li>
           <li>Catalogues list what was reported; an empty list doesn't mean nothing happened.</li>
         </ul>
-        <h3>A6. Satellite before/after check</h3>
+        <h3>A7. Satellite before/after check</h3>
         <ul>
           <li>For an event since 2013, the median of clear 30 m HLS views in the weeks before is compared with the weeks after, per pixel, using the index that suits the hazard: <b>NDVI drop</b> (wind damage, tornado tracks, landslides, ash), <b>NBR drop of 0.27+</b> (burn scars; "moderate" in USGS/MTBS practice) or <b>NDWI rise of 0.2+</b> (standing water; water pixels are kept in the cloud mask for this check).</li>
           <li>A pixel needs the change and at least 2 robust sigmas of the pre-event variability; patches under 0.5 ha are dropped. Results read "Change after [date], cause unconfirmed": harvests, construction, seasons, irrigation and missed cloud can look the same.</li>

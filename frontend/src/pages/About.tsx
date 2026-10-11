@@ -26,6 +26,15 @@ export default function About() {
           data, so it costs little to keep running and can be repeated for any town.
         </p>
 
+        <h2>From screen to inspection</h2>
+        <ul>
+          <li><b>Combined screening:</b> each 250 m square is ranked from terrain (slope), drainage (height above the nearest stream), land cover, nearby buildings, recent 30 m vegetation loss and past landslides; rainfall over the last 30 days is shown for the area.</li>
+          <li><b>Evidence for every flag:</b> each listed square says why it is listed, and each input names its source, date and resolution.</li>
+          <li><b>For a decision:</b> a school, neighbourhood group or the municipality can print the ranked list as a field sheet, inspect the top squares first, and record what they find.</li>
+          <li><b>Checked by local experts:</b> the completed sheet is imported back to show whether the top-ranked squares showed more signs (cracks, tilted trees, seepage, scarps, blocked drains) than lower-ranked ones. Planned partners for Santa Ana: the municipal emergency committee, the CNE, and geology or geography teachers. This field validation has not been done yet.</li>
+          <li><b>Tested against history:</b> the rainfall rules are backtested (hit rate, false-alarm rate and every missed event are shown), and the susceptibility map is checked against where past landslides were reported.</li>
+        </ul>
+
         <h2>Why</h2>
         <p>
           Satellite data about forests, farms and drylands is free, but turning it into an answer takes specialist tools. Simple

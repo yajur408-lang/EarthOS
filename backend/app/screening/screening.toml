@@ -57,3 +57,13 @@ warning = [
 radius_km = 25               # events within this distance of the place
 match_days = 1               # an alert within +/- this many days of an event counts as a hit
 start_year = 2001
+
+[priority]
+# "Where to inspect first": clusters of high-susceptibility cells, ranked by a transparent weighted score (0-1 parts).
+block_m = 250                # sites are 250 m squares, small enough to walk and inspect
+min_site_ha = 1.0            # a square is listed if it holds at least this much high-susceptibility ground
+max_sites = 25
+exposure_radius_m = 300      # built-up land within this distance counts as exposure
+loss_radius_m = 150          # a forest-loss patch this close adds the "recent vegetation loss" factor
+history_radius_m = 1000      # a reported landslide (location +/-1 km or better) this close adds the "history" factor
+weights = { susceptibility = 0.35, exposure = 0.30, recent_loss = 0.15, history = 0.10, size = 0.10 }

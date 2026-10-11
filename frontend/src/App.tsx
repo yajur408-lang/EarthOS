@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type AnomalyEvent, type EventsResult, type HazardEvent, type HazardEvents, type HazardType, type Place, type Series, type StreetImage, type StreetNearby } from './api'
+import { api, type AnomalyEvent, type EventsResult, type HazardEvent, type HazardEvents, type HazardType, type InspectSite, type Priority, type Place, type Series, type StreetImage, type StreetNearby } from './api'
 import DateBar, { type CompareState } from './components/DateBar'
 import type { GlobeHandle, LayerSpec, Marker, ViewState } from './components/Globe'
 import LayersPanel from './components/LayersPanel'
@@ -11,6 +11,7 @@ import HazardsPanel from './components/HazardsPanel'
 import ScreeningFooter from './components/ScreeningFooter'
 import { useChangeJob, useScreening } from './useScreening'
 import NaturalHazards from './components/NaturalHazards'
+import InspectionList from './components/InspectionList'
 import { HAZARD_COLORS } from './hazardColors'
 import Icon from './components/Icon'
 import {
@@ -198,6 +199,11 @@ export default function App() {
   const hazKey = pointKey && tab === 'hazards' ? `${pointKey}|${hazAround ? date : 'all'}` : null
   const hazEvents = useFetch<HazardEvents>(hazKey, (s) => api.hazardEvents({
     lat: pLat!, lon: pLon!, ...(hazAround ? { start: shiftDate(date, -60), end: shiftDate(date, 60) } : {}) }, s))
+  // Where to inspect first: ranked 250 m squares for the screening area.
+  const [inspectKind, setInspectKind] = useState<InspectSite['kind']>('slope')
+  const [inspectSel, setInspectSel] = useState<string | null>(null)
+  const prioKey = pointKey && tab === 'hazards' ? pointKey : null
+  const prio = useFetch<Priority>(prioKey, (s) => api.priority(pLat!, pLon!, s))
   const change = useChangeJob(place, hazSel && hazSel.satellite_check ? { hazard: hazSel.type as HazardType, date: hazSel.date } : null)
   const eventsKey = pointKey && extras && tab === 'news' ? pointKey : null
   const events = useFetch<EventsResult>(eventsKey, (s) => api.events({ lat: pLat!, lon: pLon! }, s))
@@ -330,6 +336,12 @@ export default function App() {
         color: streetOpen?.id === i.id ? '#fbbc04' : '#1a73e8',
       }))
     }
+    if (place && tab === 'hazards' && prio.data && !hazSel) {
+      return prio.data.sites.filter((x) => x.kind === inspectKind).map((x) => ({
+        id: `p:${x.id}`, lat: x.lat, lon: x.lon, color: x.kind === 'slope' ? '#c62828' : '#1565c0',
+        size: inspectSel === x.id ? 15 : 10, label: x.id,
+      }))
+    }
     if (place && tab === 'hazards' && hazEvents.data) {
       return hazEvents.data.events.slice(0, 150).map((e, i) => ({
         id: `h:${i}`, lat: e.lat, lon: e.lon, color: HAZARD_COLORS[e.type],
@@ -344,13 +356,15 @@ export default function App() {
       ]
     }
     return []
-  }, [place, tab, street.data, streetOpen, events.data, hazEvents.data, hazSel])
+  }, [place, tab, street.data, streetOpen, events.data, hazEvents.data, hazSel, prio.data, inspectKind, inspectSel])
 
   const onMarker = useCallback((id: string) => {
     const [kind, ...rest] = id.split(':')
     if (kind === 's') {
       const img = street.data?.items.find((i) => i.provider === rest[0] && i.id === rest[1])
       if (img) setStreetOpen(img)
+    } else if (kind === 'p') {
+      setInspectSel(rest.join(':'))
     } else if (kind === 'h' && hazEvents.data) {
       const e = hazEvents.data.events[+rest[0]]
       if (e) setHazSel(e)
@@ -473,6 +487,16 @@ export default function App() {
               showLoss={hazardLayers.loss} onShowLoss={(on) => setHazardLayers((h) => ({ ...h, loss: on }))}
               onFly={(lat, lon) => { setHazardLayers((h) => ({ ...h, loss: true })); globe.current?.flyTo(lat, lon, 3500, -50) }}
               onRunLoss={() => { screening.runLoss().catch((e: Error) => setNotice(`Couldn't start: ${e.message}`)) }}
+              inspect={(
+                <InspectionList data={prio.data} loading={prio.loading} error={prio.error} place={place.name ?? fmtLatLon(place.lat, place.lon)}
+                  kind={inspectKind} onKind={(k) => { setInspectKind(k); setInspectSel(null) }}
+                  selected={inspectSel}
+                  onSelect={(x) => {
+                    setInspectSel(x.id)
+                    setHazSel(null)
+                    globe.current?.flyTo(x.lat, x.lon, 2500, -50)
+                  }} />
+              )}
               natural={(
                 <NaturalHazards data={hazEvents.data} loading={hazEvents.loading} error={hazEvents.error}
                   around={hazAround} onAround={setHazAround} date={date}

@@ -461,6 +461,28 @@ async def screening_loss(lat: float = LatQ, lon: float = LonQ, half_km: float | 
     return {**_loss_payload(clat, clon, h, day, start=start or None), "notice": SCREENING_NOTICE}
 
 
+@app.get("/api/screening/priority")
+async def screening_priority(lat: float = LatQ, lon: float = LonQ, half_km: float | None = Query(None, ge=1, le=8)):
+    """Where to inspect first: ranked sites with reasons and evidence, rainfall context for the area, and a check of the
+    susceptibility map against past landslide locations."""
+    from .screening import priority, service, trigger
+    clat, clon, h = _screen_area(lat, lon, half_km)
+    a = await service.area(clat, clon, h)
+    g = service._grid(a)
+    st = service.loss_status(clat, clon, h, service.default_loss_end())
+    loss = st if st.get("status") == "done" else st.get("previous")
+    events = trigger.events_near(clat, clon, h * 1.5 + 2)
+    res = await asyncio.to_thread(priority.build, a, g, loss, events, (clat, clon))
+    try:
+        rain = await priority.rainfall_context(clat, clon)
+    except Exception as e:  # noqa: BLE001
+        rain = {"available": False, "error": f"{type(e).__name__}"}
+    return {**res, "area": {"lat": clat, "lon": clon, "half_km": h}, "bounds": g.bounds(),
+            "rainfall": rain, "evidence": priority.evidence(loss), "forest_loss_used": bool(loss),
+            "weights": priority.P["weights"], "settings": {k: v for k, v in priority.P.items() if k != "weights"},
+            "method": priority.METHOD, "notice": SCREENING_NOTICE}
+
+
 @app.get("/api/hazards/events")
 async def hazard_events(lat: float = LatQ, lon: float = LonQ, start: str | None = DateQ("from (default 1980-01-01)"), end: str | None = DateQ("to (default today)")):
     """Tropical cyclones, tornadoes (US), earthquakes, wildfires, volcanoes, floods, storms and landslides near a place,

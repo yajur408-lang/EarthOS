@@ -331,6 +331,7 @@ export interface BacktestEvent {
 }
 export interface BacktestScore {
   level: TriggerLevel; events: number; hits: number; hit_rate: number | null
+  misses: number; missed_events: { date: string; title: string }[]
   alert_episodes: number; false_alarms: number; false_alarm_rate: number | null; alert_days_per_year: number
 }
 export interface Backtest {
@@ -390,6 +391,35 @@ export type ChangeStatus = (
   | { status: 'not_started' | 'unavailable' | 'error'; error?: string }
 ) & { overlay: string; hazard: HazardType; event_date: string; area: { lat: number; lon: number; half_km: number } }
 
+// ---------- where to inspect first ----------
+export interface InspectSite {
+  id: string; rank: number; kind: 'slope' | 'stream corridor'; score: number
+  parts: Record<'susceptibility' | 'exposure' | 'recent_loss' | 'history' | 'size', number>
+  lat: number; lon: number; area_ha: number; high_share: number; uncertain_share: number
+  reasons: string[]; bbox: [number, number, number, number]; square_m: number
+}
+export interface SuscValidation {
+  events_in_area: number; events_usable: number; excluded_vague_location: number
+  share_in_high: number | null; share_in_medium_or_high: number | null
+  area_share: Record<SuscClass, number>
+  missed: { date: string; title: string }[]
+  events: { date: string; title: string; lat: number; lon: number; accuracy: string; origin: string; class_at_point: SuscClass; highest_within_100m: SuscClass }[]
+  method: string; caveat: string
+}
+export interface Priority {
+  sites: InspectSite[]
+  total_sites: Record<'slope' | 'stream corridor', number>
+  validation: SuscValidation
+  area: { lat: number; lon: number; half_km: number }
+  bounds: Susceptibility['bounds']
+  rainfall: { available: boolean; window?: [string, string]; rain_mm?: number; normal_mm?: number | null; percent_of_normal?: number | null; years_compared?: number; note?: string }
+  evidence: { layer: string; source: string; date: string; resolution: string }[]
+  forest_loss_used: boolean
+  weights: Record<string, number>
+  method: string
+  notice: string
+}
+
 export const api = {
   places: () => get<Place[]>('/api/places'),
   series: (p: { lat: number; lon: number; km: number; start_year: number; end_year: number; z: number; drop: number }, signal?: AbortSignal) =>
@@ -419,5 +449,6 @@ export const api = {
     get<HazardEvents>('/api/hazards/events', p, signal),
   hazardChange: (p: { lat: number; lon: number; hazard: HazardType; date: string; start?: boolean }, signal?: AbortSignal) =>
     get<ChangeStatus>('/api/hazards/change', { ...p, start: p.start ? 'true' : undefined }, signal),
+  priority: (lat: number, lon: number, signal?: AbortSignal) => get<Priority>('/api/screening/priority', { lat, lon }, signal),
   url: (path: string) => `${BASE}${path}`,
 }
