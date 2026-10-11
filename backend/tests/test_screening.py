@@ -140,3 +140,36 @@ def test_cog_reads_striped_tiffs_deflate_and_lzw():
 def test_zone_from_mgrs_tile():
     assert forest_loss._zone_from_tile("16PGR") == (16, True)
     assert forest_loss._zone_from_tile("19HCD") == (19, False)
+
+
+def test_change_run_end_to_end_with_synthetic_scenes(monkeypatch):
+    import asyncio
+
+    from app import config
+    from app.screening import change
+
+    lat = np.linspace(10.01, 10.0, 40)
+    lon = np.linspace(-84.0, -83.99, 40)
+    slope = np.full((40, 40), 5.0)
+    event = dt.date(2020, 6, 1)
+
+    async def granules(client, bbox, start, end):
+        kind = "after" if start > event else "before"
+        return [{"id": f"{kind}{i}", "date": (start + dt.timedelta(days=i)).isoformat(), "cloud": 5, "sensor": "S30",
+                 "tile": "16PGR", "ndvi": kind, "vi": {"NDVI": kind}, "fmask": "f"} for i in range(4)]
+
+    async def read(client, g, lat2, lon2, headers, reject, index="NDVI"):
+        rng = np.random.default_rng(len(g["id"]) + int(g["id"][-1]))
+        arr = 0.8 + rng.normal(0, 0.01, lat2.shape)
+        if g["ndvi"] == "after":
+            arr[10:20, 10:20] = 0.3  # a 100-cell blowdown patch
+        return arr.astype(np.float32)
+
+    monkeypatch.setattr(config, "EARTHDATA_TOKEN", "test-token")
+    monkeypatch.setattr(change.forest_loss, "_granules", granules)
+    monkeypatch.setattr(change.forest_loss, "_read_granule", read)
+    res = asyncio.run(change.run(lat, lon, slope, 900.0, "cyclone", event))
+    assert res["scenes"] == {"before": 4, "after": 4}
+    assert len(res["patches"]) == 1 and res["patches"][0]["pixels"] == 100
+    assert res["patches"][0]["label"].endswith("cause unconfirmed")
+    assert res["mask"].sum() == 100

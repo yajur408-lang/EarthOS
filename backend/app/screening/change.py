@@ -81,9 +81,10 @@ async def run(grid_lat, grid_lon, slope, cell_m2: float, hazard: str, event: dt.
         side = "before" if not stacks["before"] else "after"
         return {**_empty(hazard, index, before, after, f"No clear 30 m views {side} the event (cloud or no passes)."),
                 "diagnostics": diag}
+    n_scenes = {k: len(v) for k, v in stacks.items()}
     b_med, mad, n_b = forest_loss.stack_stats(stacks["before"], mad=True)
     a_med, _, n_a = forest_loss.stack_stats(stacks["after"])
-    stacks.clear()
+    stacks.clear()  # free the scene stacks before building patches
     diff = (a_med - b_med) * p["sign"]  # positive = change in the hazard direction
     z = diff / np.maximum(1.4826 * np.nan_to_num(mad), 0.03)
     judged = (n_b >= MIN_BEFORE_OBS) & (n_a >= MIN_AFTER_OBS)
@@ -114,7 +115,7 @@ async def run(grid_lat, grid_lon, slope, cell_m2: float, hazard: str, event: dt.
         "judged_share": round(float(judged.mean()), 3),
         "before_window": [before[0].isoformat(), before[1].isoformat()],
         "after_window": [after[0].isoformat(), after[1].isoformat()],
-        "scenes": {"before": len(stacks["before"]), "after": len(stacks["after"])},
+        "scenes": n_scenes,
         "scene_dates": {k: sorted(v) for k, v in dates.items()},
         "qa": forest_loss._qa_text() + (" Water pixels are kept for the flood check." if index == "NDWI" else ""),
         "thresholds": {"change": p["threshold"], "robust_z": ROBUST_Z, "min_patch_ha": LOSS["min_patch_ha"],
