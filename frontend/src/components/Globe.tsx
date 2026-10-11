@@ -28,6 +28,7 @@ import {
   Viewer,
   WebMapServiceImageryProvider,
   WebMapTileServiceImageryProvider,
+  WebMercatorTilingScheme,
   type Entity,
   type ImageryProvider,
 } from 'cesium'
@@ -96,43 +97,48 @@ interface Props {
   onView: (v: ViewState) => void
 }
 
-const GIBS_WMTS = 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best'
+const GIBS_WMTS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
 const GIBS_WMS = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi'
 
-// GIBS EPSG:4326 tile matrices start at (-180, 90) with 2x1 level-0 tiles that are each
-// 288° wide (512 px at 0.5625°/px), so the scheme extends past the globe to 396°E / 198°S.
-const gibsTilingScheme = () =>
-  new GeographicTilingScheme({
-    numberOfLevelZeroTilesX: 2,
-    numberOfLevelZeroTilesY: 1,
-    rectangle: Rectangle.fromDegrees(-180, -198, 396, 90),
+// Tiles come from the GIBS Web Mercator endpoint. Its EPSG:4326 tiles start as two 288°-wide tiles that run past the
+// antimeridian, which Cesium's tiling schemes can't represent: imagery east of ~108°E was stretched into streaks or
+// never drawn (most visibly as an empty right half in compare mode).
+// GIBS sometimes drops or times out tile requests under load (two compare layers plus the base can be ~100 tiles at once).
+// Cesium never re-requests a failed tile by default, which leaves permanent holes, so retry each tile a few times.
+const GIBS_RETRIES = 4
+function withRetry<T extends ImageryProvider>(p: T): T {
+  p.errorEvent.addEventListener((e) => {
+    if (e.timesRetried < GIBS_RETRIES) e.retry = true
   })
+  return p
+}
 
 function makeProvider(layer: GibsLayer, date?: string): ImageryProvider {
   const credit = new Credit(layer.credit ? `NASA GIBS · ${layer.credit}` : 'NASA GIBS')
   if (layer.wms) {
-    return new WebMapServiceImageryProvider({
+    return withRetry(new WebMapServiceImageryProvider({
       url: GIBS_WMS,
       layers: layer.gibsId,
       parameters: { transparent: true, format: 'image/png', TIME: date ?? 'default' },
       tilingScheme: new GeographicTilingScheme(),
       maximumLevel: 10,
       credit,
-    })
+    }))
   }
   const time = layer.timed ? (date ?? 'default') : 'default'
-  return new WebMapTileServiceImageryProvider({
+  const level = MAX_LEVEL[layer.matrixSet]
+  return withRetry(new WebMapTileServiceImageryProvider({
     url: `${GIBS_WMTS}/${layer.gibsId}/default/${time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.${layer.format}`,
     layer: layer.gibsId,
     style: 'default',
     format: layer.format === 'jpg' ? 'image/jpeg' : 'image/png',
-    tileMatrixSetID: layer.matrixSet,
-    tilingScheme: gibsTilingScheme(),
-    tileWidth: 512,
-    tileHeight: 512,
-    maximumLevel: MAX_LEVEL[layer.matrixSet],
+    tileMatrixSetID: `GoogleMapsCompatible_Level${level}`,
+    tilingScheme: new WebMercatorTilingScheme(),
+    tileWidth: 256,
+    tileHeight: 256,
+    maximumLevel: level,
     credit,
-  })
+  }))
 }
 
 const specKey = (s: LayerSpec) => `${s.layerId}|${s.date ?? ''}|${s.split ?? ''}|${s.image?.url ?? ''}`

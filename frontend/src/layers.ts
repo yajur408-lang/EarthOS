@@ -1,5 +1,6 @@
 // NASA GIBS layer catalogue. Identifiers, formats and tile matrix sets were checked
-// against https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/1.0.0/WMTSCapabilities.xml
+// against https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/1.0.0/WMTSCapabilities.xml; the globe reads the same
+// layers from the Web Mercator endpoint (epsg3857), whose 256 px GoogleMapsCompatible tiles line up with Cesium.
 
 export type LayerKind = 'base' | 'overlay' | 'detail' | 'hazard'
 
@@ -21,13 +22,14 @@ export interface GibsLayer {
   wms?: boolean
 }
 
+/** Native resolution as a Web Mercator zoom level: the GIBS epsg3857 tile matrix set is GoogleMapsCompatible_Level{n}. */
 export const MAX_LEVEL: Record<GibsLayer['matrixSet'], number> = {
-  '250m': 8,
-  '500m': 7,
-  '1km': 6,
-  '2km': 5,
-  '31.25m': 11,
-  '15.625m': 12,
+  '250m': 9,
+  '500m': 8,
+  '1km': 7,
+  '2km': 6,
+  '31.25m': 12,
+  '15.625m': 13,
 }
 
 export const LAYERS: GibsLayer[] = [
