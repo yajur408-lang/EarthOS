@@ -22,6 +22,8 @@ import {
   SingleTileImageryProvider,
   SplitDirection,
   TextureMagnificationFilter,
+  TileMapServiceImageryProvider,
+  buildModuleUrl,
   VerticalOrigin,
   Viewer,
   WebMapServiceImageryProvider,
@@ -292,6 +294,10 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, PROFILE.maxPixelRatio) / (window.devicePixelRatio || 1)
     scene.postProcessStages.fxaa.enabled = false // MSAA (desktop) is sharper and cheaper than FXAA
     scene.globe.baseColor = Color.fromCssColorString('#0b1220')
+    // Offline backdrop bundled with Cesium (Natural Earth II, ~2 km), always at the bottom of the stack: if NASA GIBS
+    // is slow or unreachable the globe still shows land and sea instead of a bare blue sphere.
+    viewer.imageryLayers.add(ImageryLayer.fromProviderAsync(
+      TileMapServiceImageryProvider.fromUrl(buildModuleUrl('Assets/Textures/NaturalEarthII')), {}), 0)
     scene.backgroundColor = Color.BLACK
     scene.globe.depthTestAgainstTerrain = true
     scene.globe.maximumScreenSpaceError = PROFILE.screenSpaceError
@@ -468,7 +474,7 @@ const Globe = forwardRef<GlobeHandle, Props>(function Globe(
           }), {})
           // Crisp pixels: these are 30 m analysis cells, not photos.
           il.magnificationFilter = TextureMagnificationFilter.NEAREST
-          il.readyEvent.addEventListener(() => viewer.scene.requestRender())
+          il.readyEvent.addEventListener(() => { if (!viewer.isDestroyed()) viewer.scene.requestRender() })
         } else {
           il = new ImageryLayer(makeProvider(layerById(s.layerId), s.date), s.minLevel ? { minimumTerrainLevel: s.minLevel } : undefined)
         }
