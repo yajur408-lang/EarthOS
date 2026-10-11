@@ -9,7 +9,8 @@ const SANTA_ANA = { lat: 9.915, lon: -84.19 }
 const LABEL: Record<string, string> = { fc24: 'rain that day', fc72: '3-day rain', ante7: 'previous 7 days', soil: 'soil wetness' }
 const ruleText = (r: TriggerRule) =>
   Object.entries(r).map(([k, v]) => `${LABEL[k] ?? k} ≥ ${k === 'soil' ? v : `${v} mm`}`).join(' and ')
-const pct = (v: number | null) => (v == null ? '–' : `${Math.round(v * 100)}%`)
+const pct = (v: number | null | undefined) => (v == null ? '–' : `${Math.round(v * 100)}%`)
+const ci = (c: [number, number] | null | undefined) => (c ? ` (95% CI ${pct(c[0])}–${pct(c[1])})` : '')
 
 function readParams() {
   const q = new URLSearchParams(location.search)
@@ -55,22 +56,80 @@ export default function Backtest() {
               <p className="uncalibrated"><b>Uncalibrated here.</b> These thresholds were set for the Santa Ana pilot. The scores below show how
                 they would have done at this place, but no thresholds were chosen or checked for its climate.</p>
             )}
+            <div className="bt-limits">
+              <b>Read this first.</b>
+              <ul>
+                <li><b>Perfect-forecast hindcast:</b> past days use the rain that actually fell in place of a forecast, so real-world hit rates would be lower.</li>
+                <li><b>Coarse rain:</b> NASA POWER rain is a ~50 km average; a local downpour that triggers a slide can be invisible in it.</li>
+                <li><b>Few events:</b> {d.scores[0]?.events ?? 0} landslide days. The 95% intervals below are wide, and rates from fewer than {d.min_events_for_rate} events are greyed out.</li>
+                <li><b>Incomplete catalogue:</b> only slides that made the news are listed, so "alerts with no catalogued landslide" is an upper bound on false alarms, not a measurement.</li>
+              </ul>
+            </div>
             <p className="muted">
-              Landslides reported within {d.place.radius_km} km, {prettyDate(d.period[0])} – {prettyDate(d.period[1])}.
-              A hit means an alert was active within ±{d.match_days} day{d.match_days === 1 ? '' : 's'} of the reported date.
+              Landslides reported within {d.place.radius_km} km, {prettyDate(d.period[0])} – {prettyDate(d.period[1])}; several reports on one day count as one landslide day.
+              A hit means the level was active within ±{d.match_days} day{d.match_days === 1 ? '' : 's'} of the reported date.
             </p>
             <div className="bt-scores">
               {d.scores.map((s) => (
-                <div key={s.level} className="bt-score">
+                <div key={s.level} className={`bt-score ${s.enough_events ? '' : 'thin'}`}>
                   <h3>{s.level === 'watch' ? 'Elevated or High rainfall' : 'High rainfall only'}</h3>
                   <div className="big">{pct(s.hit_rate)}</div>
-                  <p>hit rate: {s.hits} of {s.events} rain-triggered landslides · <b>missed {s.misses}</b></p>
-                  <div className="big">{pct(s.false_alarm_rate)}</div>
-                  <p>false-alarm rate: {s.false_alarms} of {s.alert_episodes} alert episodes had no reported landslide</p>
+                  <p>hit rate: {s.hits} of {s.events} landslide days{ci(s.hit_rate_ci)} · <b>missed {s.misses}</b></p>
+                  <div className="big">{pct(s.no_event_alert_rate)}</div>
+                  <p>alerts with no catalogued landslide: {s.no_event_alerts} of {s.alert_episodes} alert episodes{ci(s.no_event_alert_rate_ci)}</p>
                   <p>{s.alert_days_per_year} alert days per year on average</p>
+                  {!s.enough_events && <p><b>Too few events</b> (fewer than {d.min_events_for_rate}) to read much into this rate.</p>}
                 </div>
               ))}
             </div>
+
+            <h2>Compared with chance and a simpler rule</h2>
+            <p className="muted">Same number of alert days in each case, so the comparison is fair.</p>
+            <div className="bt-table-wrap">
+              <table className="bt-table">
+                <thead><tr><th>Level</th><th>EarthOS rules</th><th>Random days ({d.baselines.watch?.random?.draws ?? 0} draws)</th><th>Rain-only rule</th></tr></thead>
+                <tbody>
+                  {d.scores.map((s) => {
+                    const b = d.baselines[s.level as 'watch' | 'warning']
+                    return (
+                      <tr key={s.level}>
+                        <td>{s.level === 'watch' ? 'Elevated or High' : 'High only'} ({b?.alert_days ?? 0} alert days)</td>
+                        <td className="num">hit rate {pct(s.hit_rate)}{ci(s.hit_rate_ci)}</td>
+                        <td className="num">{b?.random ? <>hit rate {pct(b.random.hit_rate_mean)} on average (95% of draws {pct(b.random.hit_rate_95[0])}–{pct(b.random.hit_rate_95[1])}); random days did at least as well in {(b.random.p_at_least_observed * 100).toFixed(1)}% of draws</> : '–'}</td>
+                        <td className="num">{b?.rain_only ? <>rain that day ≥ {b.rain_only.threshold_mm} mm: hit rate {pct(b.rain_only.hit_rate)}{ci(b.rain_only.hit_rate_ci)}</> : '–'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted">
+              If the rules don't beat the rain-only rule, the extra inputs (3-day rain, antecedent rain, soil wetness) aren't adding skill
+              at this resolution; say so rather than claim they do.
+            </p>
+
+            {d.blocks.length > 0 && (
+              <>
+                <h2>Earlier vs later years</h2>
+                <p className="muted">{d.split_note}</p>
+                <div className="bt-table-wrap">
+                  <table className="bt-table">
+                    <thead><tr><th>Block</th><th>Level</th><th>Landslide days</th><th>Hit rate (95% CI)</th><th>Alerts with no catalogued landslide</th></tr></thead>
+                    <tbody>
+                      {d.blocks.flatMap((bl) => bl.scores.map((s) => (
+                        <tr key={bl.block + s.level} className={s.enough_events ? '' : 'excluded'}>
+                          <td>{bl.block} ({bl.period[0].slice(0, 4)}–{bl.period[1].slice(0, 4)})</td>
+                          <td>{s.level === 'watch' ? 'Elevated or High' : 'High only'}</td>
+                          <td className="num">{s.events}</td>
+                          <td className="num">{s.hits}/{s.events} = {pct(s.hit_rate)}{ci(s.hit_rate_ci)}</td>
+                          <td className="num">{s.no_event_alerts}/{s.alert_episodes}</td>
+                        </tr>
+                      )))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
             {d.events.length === 0 && <p>No landslides are recorded within {d.place.radius_km} km in the catalogues used, so the rules cannot be scored here.</p>}
 
             {d.scores[0]?.missed_events.length > 0 && (

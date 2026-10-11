@@ -225,34 +225,113 @@ def _episodes(days: pd.DatetimeIndex) -> list[tuple[dt.date, dt.date]]:
     return eps
 
 
+def wilson(k: int, n: int, z: float = 1.96) -> list[float] | None:
+    """95% Wilson score interval for a proportion k/n (sensible even for tiny n)."""
+    if not n:
+        return None
+    p = k / n
+    den = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / den
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den
+    return [round(max(0.0, centre - half), 3), round(min(1.0, centre + half), 3)]
+
+
+def _scored_events(events: list[dict], period: tuple[dt.date, dt.date]) -> list[dict]:
+    """Rain-triggered events in the period, one per day (copies: nothing is written back to the caller's dicts).
+    Several catalogue entries on one day count once - a ~50 km rain cell can't tell them apart."""
+    lo, hi = period
+    by_day: dict[str, dict] = {}
+    for e in events:
+        if e["rain_triggered"] and lo <= dt.date.fromisoformat(e["date"]) <= hi:
+            d = by_day.setdefault(e["date"], {"date": e["date"], "titles": []})
+            d["titles"].append(e.get("title", ""))
+    return [{"date": d["date"], "title": " / ".join(t for t in d["titles"] if t), "reports": len(d["titles"])}
+            for d in sorted(by_day.values(), key=lambda x: x["date"])]
+
+
+def _score_alert_days(alert_days: set[dt.date], evs: list[dict], window: int, period: tuple[dt.date, dt.date]) -> dict:
+    lo, hi = period
+    days_in = {d for d in alert_days if lo <= d <= hi}
+    hit_flags = [any((dt.date.fromisoformat(e["date"]) + dt.timedelta(days=k)) in days_in for k in range(-window, window + 1))
+                 for e in evs]
+    eps = _episodes(pd.DatetimeIndex(sorted(days_in)))
+    ev_dates = [dt.date.fromisoformat(e["date"]) for e in evs]
+    no_event = sum(1 for a, b in eps if not any(a - dt.timedelta(days=window) <= d <= b + dt.timedelta(days=window) for d in ev_dates))
+    years = max(((hi - lo).days + 1) / 365.25, 1e-9)
+    return {"hits": sum(hit_flags), "hit_flags": hit_flags, "episodes": len(eps), "no_event": no_event,
+            "alert_days": len(days_in), "alert_days_per_year": round(len(days_in) / years, 1)}
+
+
 def score(levels: pd.DataFrame, events: list[dict], min_level: int, window: int,
           period: tuple[dt.date, dt.date]) -> dict:
-    alert_days = levels.index[levels["level"] >= min_level]
-    alert_set = {d.date() for d in alert_days}
-    lo, hi = period
-    evs = [e for e in events if e["rain_triggered"] and lo <= dt.date.fromisoformat(e["date"]) <= hi]
-    hits = 0
-    for e in evs:
-        d = dt.date.fromisoformat(e["date"])
-        e_hit = any((d + dt.timedelta(days=k)) in alert_set for k in range(-window, window + 1))
-        e.setdefault("hit", {})[LEVELS[min_level]] = e_hit
-        hits += e_hit
-    eps = [ep for ep in _episodes(alert_days) if lo <= ep[0] <= hi]
-    ev_dates = [dt.date.fromisoformat(e["date"]) for e in evs]
-    false = sum(1 for a, b in eps if not any(a - dt.timedelta(days=window) <= d <= b + dt.timedelta(days=window) for d in ev_dates))
-    years = max((hi - lo).days / 365.25, 1e-9)
+    evs = _scored_events(events, period)
+    alert = {d.date() for d in levels.index[levels["level"] >= min_level]}
+    r = _score_alert_days(alert, evs, window, period)
+    n = len(evs)
     return {
         "level": LEVELS[min_level],
-        "events": len(evs),
-        "hits": hits,
-        "hit_rate": round(hits / len(evs), 3) if evs else None,
-        "misses": len(evs) - hits,
-        "missed_events": [{"date": e["date"], "title": e.get("title", "")} for e in evs if not e["hit"][LEVELS[min_level]]],
-        "alert_episodes": len(eps),
-        "false_alarms": false,
-        "false_alarm_rate": round(false / len(eps), 3) if eps else None,
-        "alert_days_per_year": round(sum(1 for d in alert_set if lo <= d <= hi) / years, 1),
+        "period": [period[0].isoformat(), period[1].isoformat()],
+        "events": n,
+        "event_reports": sum(e["reports"] for e in evs),
+        "hits": r["hits"],
+        "hit_rate": round(r["hits"] / n, 3) if n else None,
+        "hit_rate_ci": wilson(r["hits"], n),
+        "misses": n - r["hits"],
+        "missed_events": [{"date": e["date"], "title": e["title"]} for e, h in zip(evs, r["hit_flags"]) if not h],
+        "alert_episodes": r["episodes"],
+        # Alert episodes with no catalogued landslide within the window. Catalogues miss many slides, so this is an
+        # upper bound on false alarms, not a measurement of them.
+        "no_event_alerts": r["no_event"],
+        "no_event_alert_rate": round(r["no_event"] / r["episodes"], 3) if r["episodes"] else None,
+        "no_event_alert_rate_ci": wilson(r["no_event"], r["episodes"]),
+        "alert_days": r["alert_days"],
+        "alert_days_per_year": r["alert_days_per_year"],
+        "enough_events": n >= BACKTEST["min_events_for_rate"],
     }
+
+
+def baselines(levels: pd.DataFrame, events: list[dict], min_level: int, window: int,
+              period: tuple[dt.date, dt.date]) -> dict:
+    """What chance and a simpler rule achieve with the same number of alert days.
+
+    random: alert days drawn uniformly at random over the period (seeded Monte Carlo), same count as the rules.
+    rain_only: alert on the days with the most rain (fc24), with the threshold set to give the same count.
+    """
+    lo, hi = period
+    evs = _scored_events(events, period)
+    n = len(evs)
+    in_period = levels.loc[pd.Timestamp(lo):pd.Timestamp(hi)]
+    k = int((in_period["level"] >= min_level).sum())
+    days = [d.date() for d in in_period.index]
+    out: dict = {"alert_days": k, "events": n}
+    if not k or not n:
+        return out
+    rng = np.random.default_rng(BACKTEST["baseline_seed"])
+    hit_rates, ne_rates = [], []
+    for _ in range(BACKTEST["baseline_draws"]):
+        pick = {days[i] for i in rng.choice(len(days), size=k, replace=False)}
+        r = _score_alert_days(pick, evs, window, period)
+        hit_rates.append(r["hits"] / n)
+        if r["episodes"]:
+            ne_rates.append(r["no_event"] / r["episodes"])
+    q = lambda xs: [round(float(np.percentile(xs, 2.5)), 3), round(float(np.percentile(xs, 97.5)), 3)]  # noqa: E731
+    observed = score(levels, events, min_level, window, period)["hit_rate"] or 0.0
+    out["random"] = {
+        "hit_rate_mean": round(float(np.mean(hit_rates)), 3), "hit_rate_95": q(hit_rates),
+        "no_event_alert_rate_mean": round(float(np.mean(ne_rates)), 3) if ne_rates else None,
+        "p_at_least_observed": round(float(np.mean(np.array(hit_rates) >= observed - 1e-9)), 3),
+        "draws": BACKTEST["baseline_draws"],
+    }
+    rain = in_period["fc24"].fillna(-1)
+    thr = float(np.sort(rain.to_numpy())[::-1][k - 1])
+    rain_days = {d.date() for d in rain.index[rain >= thr]}
+    r = _score_alert_days(rain_days, evs, window, period)
+    out["rain_only"] = {
+        "threshold_mm": round(thr, 1), "alert_days": r["alert_days"],
+        "hit_rate": round(r["hits"] / n, 3), "hit_rate_ci": wilson(r["hits"], n),
+        "no_event_alert_rate": round(r["no_event"] / r["episodes"], 3) if r["episodes"] else None,
+    }
+    return out
 
 
 async def backtest(lat: float, lon: float) -> dict:
@@ -267,6 +346,13 @@ async def backtest(lat: float, lon: float) -> dict:
     ev_years = [int(e["date"][:4]) for e in events if e["rain_triggered"]] or [2007]
     period = (max(dt.date(min(min(ev_years), 2007), 1, 1), start), min(dt.date(max(max(ev_years), 2017), 12, 31), last))
     scores = [score(levels, events, k, window, period) for k in (1, 2)]
+    split = dt.date(BACKTEST["split_year"], 1, 1)
+    blocks = []
+    if period[0] < split <= period[1]:
+        for name, per in (("earlier", (period[0], split - dt.timedelta(days=1))), ("later", (split, period[1]))):
+            blocks.append({"block": name, "period": [per[0].isoformat(), per[1].isoformat()],
+                           "scores": [score(levels, events, k, window, per) for k in (1, 2)]})
+    base = {LEVELS[k]: baselines(levels, events, k, window, period) for k in (1, 2)}
     for e in events:
         d = pd.Timestamp(e["date"])
         if d in levels.index:
@@ -280,18 +366,26 @@ async def backtest(lat: float, lon: float) -> dict:
         "period": [period[0].isoformat(), period[1].isoformat()],
         "match_days": window,
         "scores": scores,
+        "blocks": blocks,
+        "split_note": ("The thresholds were set by judgment before scoring, not fitted to these events. The earlier and "
+                       "later blocks are reported separately so any future tuning can be done on the earlier block and "
+                       "judged on the later one."),
+        "baselines": base,
+        "min_events_for_rate": BACKTEST["min_events_for_rate"],
         "events": events,
         "rules": {"watch": TRIGGER["watch"], "warning": TRIGGER["warning"]},
         "method": (
             "Each past day is scored with the same rules, using that day's observed rain (NASA POWER) in place of the "
             "forecast: fc24 = rain that day, fc72 = that day plus the next two, ante7 = the 7 days before, soil = the day "
             f"before. A rain-triggered landslide counts as a hit if an alert was active within +/-{window} day(s). "
-            "Hit rate = hits / events. False-alarm rate = alert episodes with no reported landslide within "
-            f"+/-{window} day(s) / all alert episodes."
+            "Hit rate = hits / events (events on the same day count once). 'Alerts with no catalogued landslide' = alert "
+            f"episodes with no reported landslide within +/-{window} day(s) / all alert episodes - an upper bound on false "
+            "alarms, because catalogues miss many slides. 95% Wilson intervals are shown. Baselines: the same number of "
+            "alert days placed at random (Monte Carlo), and a rain-only rule set to the same number of alert days."
         ),
         "caveats": [
             "Perfect-forecast hindcast: real forecasts are less accurate, so real-world hit rates would be lower.",
-            "Landslide catalogues only include events that made the news, so many 'false alarms' may be unreported slides.",
+            "Landslide catalogues only include events that made the news, so many 'alerts with no catalogued landslide' may be unreported slides.",
             "NASA POWER rain is a ~50 km grid average, which smooths out the local downpours that often trigger slides.",
             "Few events: treat the rates as a first check of the thresholds, not a validated skill score.",
         ],

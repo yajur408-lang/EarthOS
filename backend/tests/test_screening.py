@@ -32,7 +32,8 @@ def test_backtest_scoring_hits_and_false_alarms():
     s = trigger.score(levels, events, 1, 1, (dt.date(2010, 1, 1), dt.date(2010, 12, 31)))
     assert s["events"] == 2 and s["hits"] == 1 and s["hit_rate"] == 0.5
     # 120 mm on day d also makes fc72 >= 80 on the two days before -> 2 episodes; one has no landslide
-    assert s["alert_episodes"] == 2 and s["false_alarms"] == 1
+    assert s["alert_episodes"] == 2 and s["no_event_alerts"] == 1
+    assert s["hit_rate_ci"][0] < 0.5 < s["hit_rate_ci"][1]
 
 
 def test_susceptibility_classes_and_wording():
@@ -254,3 +255,44 @@ def test_unknown_drainage_is_never_lower():
     assert summ["unassessed_share"] == round(1 / 3, 3)
     assert summ["classes"]["lower"]["share"] == round(1 / 3, 3)  # only the cell with known drainage
     assert susceptibility.at(s, 0, 0, 5.0, float("nan"), "Tree cover")["class"] == "unassessed"
+
+
+def test_wilson_interval_known_values():
+    assert trigger.wilson(0, 0) is None
+    lo, hi = trigger.wilson(5, 10)
+    assert abs(lo - 0.237) < 0.002 and abs(hi - 0.763) < 0.002  # textbook 95% Wilson for 5/10
+    lo, hi = trigger.wilson(0, 3)
+    assert lo == 0.0 and 0.5 < hi < 0.6
+
+
+def test_scoring_dedupes_same_day_and_never_mutates_input():
+    days = pd.date_range("2010-01-01", "2010-12-31")
+    rain = pd.Series(0.0, index=days)
+    rain["2010-06-10"] = 120.0
+    levels = trigger.hindcast(pd.DataFrame({"precip_mm": rain, "soil_wetness": 0.5}))
+    events = [{"date": "2010-06-10", "rain_triggered": True, "title": "a"},
+              {"date": "2010-06-10", "rain_triggered": True, "title": "b"}]
+    before = [dict(e) for e in events]
+    period = (dt.date(2010, 1, 1), dt.date(2010, 12, 31))
+    s1 = trigger.score(levels, events, 1, 1, period)
+    s2 = trigger.score(levels, events, 2, 1, period)
+    assert s1["events"] == 1 and s1["event_reports"] == 2 and s1["hits"] == 1
+    assert s2["events"] == 1
+    assert events == before  # E7: scoring one level can't leak into the next
+
+
+def test_baselines_random_and_rain_only():
+    days = pd.date_range("2005-01-01", "2014-12-31")
+    rng = np.random.default_rng(0)
+    rain = pd.Series(rng.gamma(0.5, 6.0, len(days)), index=days)
+    events = []
+    for d in pd.date_range("2005-03-01", "2014-10-01", freq="97D"):  # landslides on very wet days
+        rain[d] = 140.0
+        events.append({"date": d.date().isoformat(), "rain_triggered": True, "title": "x"})
+    levels = trigger.hindcast(pd.DataFrame({"precip_mm": rain, "soil_wetness": 0.5}))
+    period = (dt.date(2005, 1, 1), dt.date(2014, 12, 31))
+    b = trigger.baselines(levels, events, 1, 1, period)
+    obs = trigger.score(levels, events, 1, 1, period)
+    assert obs["hit_rate"] == 1.0
+    assert b["random"]["hit_rate_mean"] < 0.3 and b["random"]["p_at_least_observed"] < 0.01
+    assert b["rain_only"]["alert_days"] >= b["alert_days"] and b["rain_only"]["hit_rate"] == 1.0

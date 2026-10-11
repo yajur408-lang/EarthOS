@@ -57,6 +57,12 @@ warning = [
 radius_km = 25               # events within this distance of the place
 match_days = 1               # an alert within +/- this many days of an event counts as a hit
 start_year = 2001
+split_year = 2011            # scores are also reported for an earlier block (< split_year) and a later block (>= split_year).
+                             # The thresholds above were set by judgment, not fitted; any future tuning must use only the
+                             # earlier block and be judged on the later one.
+min_events_for_rate = 10     # rates from fewer events are shown greyed out ("too few events")
+baseline_draws = 1000        # Monte Carlo draws for the random-days baseline
+baseline_seed = 42           # fixed so the page shows the same numbers every time
 
 [priority]
 # "Where to inspect first": clusters of high-susceptibility cells, ranked by a transparent weighted score (0-1 parts).

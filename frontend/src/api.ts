@@ -337,15 +337,26 @@ export interface BacktestEvent {
   hit?: Partial<Record<TriggerLevel, boolean>>
 }
 export interface BacktestScore {
-  level: TriggerLevel; events: number; hits: number; hit_rate: number | null
+  level: TriggerLevel; period: [string, string]; events: number; event_reports: number; hits: number
+  hit_rate: number | null; hit_rate_ci: [number, number] | null
   misses: number; missed_events: { date: string; title: string }[]
-  alert_episodes: number; false_alarms: number; false_alarm_rate: number | null; alert_days_per_year: number
+  alert_episodes: number; no_event_alerts: number; no_event_alert_rate: number | null; no_event_alert_rate_ci: [number, number] | null
+  alert_days: number; alert_days_per_year: number; enough_events: boolean
+}
+export interface BacktestBaseline {
+  alert_days: number; events: number
+  random?: { hit_rate_mean: number; hit_rate_95: [number, number]; no_event_alert_rate_mean: number | null; p_at_least_observed: number; draws: number }
+  rain_only?: { threshold_mm: number; alert_days: number; hit_rate: number; hit_rate_ci: [number, number] | null; no_event_alert_rate: number | null }
 }
 export interface Backtest {
   place: { lat: number; lon: number; radius_km: number }
   period: [string, string]
   match_days: number
   scores: BacktestScore[]
+  blocks: { block: 'earlier' | 'later'; period: [string, string]; scores: BacktestScore[] }[]
+  split_note: string
+  baselines: Record<'watch' | 'warning', BacktestBaseline>
+  min_events_for_rate: number
   events: BacktestEvent[]
   rules: { watch: TriggerRule[]; warning: TriggerRule[] }
   method: string
