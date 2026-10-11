@@ -41,6 +41,20 @@ export default function Methods() {
           <li>Catalogues only include landslides that made the news, so some "false alarms" are probably unreported slides; real forecasts are less accurate than observed rain, so real hit rates would be lower. <a {...linkProps('/backtest')}>See the backtest</a>.</li>
         </ul>
 
+        <h3>A5. Natural hazards near a place</h3>
+        <ul>
+          <li><b>Tropical cyclones:</b> NOAA IBTrACS 6-hourly best-track centres since 1980, within 200 km; the closest approach and the strongest winds within that radius (Saffir-Simpson category from the wind speed).</li>
+          <li><b>Tornadoes:</b> NOAA Storm Prediction Center paths since 1950 (United States only), within 40 km of the straight start-end path, with (E)F rating, length, width and reported casualties.</li>
+          <li><b>Earthquakes:</b> USGS ComCat, magnitude 4.5+, within 150 km. <b>Wildfires, volcanoes, floods, storms, drought:</b> NASA EONET (about 2015 onwards), within 100 km. <b>Landslides:</b> as in the backtest.</li>
+          <li>Catalogues list what was reported; an empty list doesn't mean nothing happened.</li>
+        </ul>
+        <h3>A6. Satellite before/after check</h3>
+        <ul>
+          <li>For an event since 2013, the median of clear 30 m HLS views in the weeks before is compared with the weeks after, per pixel, using the index that suits the hazard: <b>NDVI drop</b> (wind damage, tornado tracks, landslides, ash), <b>NBR drop of 0.27+</b> (burn scars; "moderate" in USGS/MTBS practice) or <b>NDWI rise of 0.2+</b> (standing water; water pixels are kept in the cloud mask for this check).</li>
+          <li>A pixel needs the change and at least 2 robust sigmas of the pre-event variability; patches under 0.5 ha are dropped. Results read "Change after [date], cause unconfirmed": harvests, construction, seasons, irrigation and missed cloud can look the same.</li>
+          <li>Live context layers from NASA GIBS: GOES and Himawari geostationary imagery, MODIS/VIIRS flood maps, OPERA surface water (optical and radar) and vegetation-disturbance alerts, and VIIRS night lights (outages).</li>
+        </ul>
+
         <h2>B. Vegetation anomalies</h2>
 
         <h2>1. Vegetation measurements</h2>
@@ -116,6 +130,11 @@ export default function Methods() {
           <li>Rennó, C. D. et al. (2008). HAND. Remote Sensing of Environment 112:3469–3481; Nobre, A. D. et al. (2011). J. Hydrology 404:13–29.</li>
           <li>Kirschbaum, D. et al. (2010). Natural Hazards 52:561–575; Kirschbaum, Stanley &amp; Zhou (2015). Geomorphology 249:4–15 (Global Landslide Catalog).</li>
           <li>MET Norway Locationforecast 2.0 (CC BY 4.0).</li>
+          <li>Knapp, K. R. et al. (2010). IBTrACS. BAMS 91:363–376; Gahtan, J. et al. (2024). IBTrACS v04r01. NOAA NCEI. doi:10.25921/82ty-9e16</li>
+          <li>NOAA/NWS Storm Prediction Center, Severe Weather Database (tornadoes, 1950 onwards).</li>
+          <li>U.S. Geological Survey, ComCat earthquake catalogue.</li>
+          <li>Key, C. H., Benson, N. C. (2006). Landscape Assessment (dNBR). USDA Forest Service RMRS-GTR-164-CD.</li>
+          <li>McFeeters, S. K. (1996). The use of the Normalized Difference Water Index (NDWI). Int. J. Remote Sensing 17:1425–1432.</li>
           <li>CNE: Informe técnico, deslizamiento Tapezco (2018), via the Municipalidad de Santa Ana open-data portal.</li>
         </ul>
         <p><a {...linkProps('/explore')}>Open the explorer →</a></p>

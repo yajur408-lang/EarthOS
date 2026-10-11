@@ -60,12 +60,13 @@ async def _granules(client, bbox: tuple[float, float, float, float], start: dt.d
                     continue
                 urls = [x["URL"] for x in u.get("RelatedUrls", []) if x.get("Type", "").startswith("GET DATA")
                         and x["URL"].startswith("https://")]
-                ndvi = next((x for x in urls if x.endswith(".NDVI.tif")), None)
+                vi = {k: next((x for x in urls if x.endswith(f".{k}.tif")), None) for k in ("NDVI", "NBR", "NDWI")}
+                ndvi = vi["NDVI"]
                 fmask = next((x for x in urls if x.endswith(".Fmask.tif")), None)
                 if not ndvi or not fmask:
                     continue
                 date = u["TemporalExtent"]["RangeDateTime"]["BeginningDateTime"][:10]
-                out.append({"id": u["GranuleUR"], "date": date, "cloud": cloud, "ndvi": ndvi, "fmask": fmask,
+                out.append({"id": u["GranuleUR"], "date": date, "cloud": cloud, "ndvi": ndvi, "vi": vi, "fmask": fmask,
                             "tile": attrs.get("MGRS_TILE_ID"), "sensor": "S30" if product.startswith("HLSS") else "L30"})
             if len(items) < 200:
                 break
@@ -90,9 +91,12 @@ def _windows(end: dt.date) -> tuple[tuple[dt.date, dt.date], list[tuple[int, dt.
 
 
 async def _read_granule(client, g: dict, lat2: np.ndarray, lon2: np.ndarray, headers: dict,
-                        reject_mask: int) -> np.ndarray | None:
-    """Clear NDVI on the grid (NaN where cloudy, outside the tile, or fill)."""
-    n = await cog.open_cog(client, g["ndvi"], headers)
+                        reject_mask: int, index: str = "NDVI") -> np.ndarray | None:
+    """Clear values of a vegetation/water index on the grid (NaN where cloudy, outside the tile, or fill)."""
+    url = (g.get("vi") or {}).get(index) or (g["ndvi"] if index == "NDVI" else None)
+    if not url:
+        return None
+    n = await cog.open_cog(client, url, headers)
     zone, north = utm.from_epsg(n.epsg)
     x, y = utm.forward(lat2, lon2, zone, north)
     fc, fr = n.pixel(x, y)
@@ -117,6 +121,50 @@ async def _read_granule(client, g: dict, lat2: np.ndarray, lon2: np.ndarray, hea
     out = np.full(lat2.shape, np.nan, dtype=np.float32)
     vals = np.where(bad, np.nan, nd).astype(np.float32)
     out[inside] = vals
+    return out
+
+
+# ---- memory-light stacks (the free host has 512 MB): int16 x 10000, NaN as -32768, statistics in row chunks
+
+NODATA16 = -32768
+MAX_SCENES_PER_YEAR = 15  # clearest baseline scenes kept per year
+
+
+def pack(arr: np.ndarray) -> np.ndarray:
+    out = np.full(arr.shape, NODATA16, dtype=np.int16)
+    ok = np.isfinite(arr)
+    out[ok] = np.clip(np.round(arr[ok] * 10000), -10000, 10000).astype(np.int16)
+    return out
+
+
+def stack_stats(stack: list[np.ndarray], mad: bool = False, rows: int = 32):
+    """Per-pixel (median, MAD or None, count of clear values) without building a full float copy."""
+    h, w = stack[0].shape
+    med = np.full((h, w), np.nan, dtype=np.float32)
+    dev = np.full((h, w), np.nan, dtype=np.float32) if mad else None
+    count = np.zeros((h, w), dtype=np.int16)
+    import warnings
+    for r in range(0, h, rows):
+        sub = np.stack([s[r:r + rows] for s in stack]).astype(np.float32)
+        sub[sub == NODATA16] = np.nan
+        sub /= 10000
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            m = np.nanmedian(sub, 0)
+            med[r:r + rows] = m
+            if mad:
+                dev[r:r + rows] = np.nanmedian(np.abs(sub - m), 0)
+        count[r:r + rows] = np.isfinite(sub).sum(0)
+    return med, dev, count
+
+
+def cap_per_year(granules: list[dict]) -> list[dict]:
+    by_year: dict[int, list[dict]] = {}
+    for g in granules:
+        by_year.setdefault(g.get("year", 0), []).append(g)
+    out = []
+    for gs in by_year.values():
+        out += sorted(gs, key=lambda g: g["cloud"])[:MAX_SCENES_PER_YEAR]
     return out
 
 
@@ -159,8 +207,9 @@ async def run(grid_lat: np.ndarray, grid_lon: np.ndarray, slope: np.ndarray, cel
         for year, a, b in base:
             for g in await _granules(client, bbox, a, b):
                 base_g.append({**g, "year": year})
+        base_g = cap_per_year(base_g)
         jobs = [("recent", g) for g in recent_g] + [("base", g) for g in base_g]
-        sem = asyncio.Semaphore(6)
+        sem = asyncio.Semaphore(4)
         done = 0
 
         async def one(kind, g):
@@ -168,6 +217,7 @@ async def run(grid_lat: np.ndarray, grid_lon: np.ndarray, slope: np.ndarray, cel
             async with sem:
                 try:
                     arr = await _read_granule(client, g, lat2, lon2, headers, reject)
+                    arr = None if arr is None else pack(arr)
                 except Exception as e:  # noqa: BLE001 - one bad file shouldn't sink the run
                     arr, g["error"] = None, str(e)[:200]
             done += 1
@@ -180,7 +230,7 @@ async def run(grid_lat: np.ndarray, grid_lon: np.ndarray, slope: np.ndarray, cel
     stacks: dict[str, list[np.ndarray]] = {"recent": [], "base": []}
     used: dict[str, list[dict]] = {"recent": [], "base": []}
     for kind, g, arr in results:
-        if arr is None or not np.isfinite(arr).any():
+        if arr is None or not (arr != NODATA16).any():
             continue
         stacks[kind].append(arr)
         used[kind].append({"date": g["date"], "sensor": g["sensor"], "tile": g["tile"], "cloud_pct": g["cloud"],
@@ -189,17 +239,9 @@ async def run(grid_lat: np.ndarray, grid_lon: np.ndarray, slope: np.ndarray, cel
     if not stacks["recent"] or not stacks["base"]:
         return {**_empty(recent, base, used, "Not enough clear HLS scenes in the recent or baseline windows."), "diagnostics": diag}
 
-    rec = np.stack(stacks["recent"])
-    bas = np.stack(stacks["base"])
-    n_rec = np.isfinite(rec).sum(0)
-    n_bas = np.isfinite(bas).sum(0)
-    with np.errstate(all="ignore"):
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            rec_med = np.nanmedian(rec, 0)
-            bas_med = np.nanmedian(bas, 0)
-            mad = np.nanmedian(np.abs(bas - bas_med), 0)
+    rec_med, _, n_rec = stack_stats(stacks["recent"])
+    bas_med, mad, n_bas = stack_stats(stacks["base"], mad=True)
+    stacks.clear()
     sigma = np.maximum(1.4826 * np.nan_to_num(mad), 0.03)
     diff = rec_med - bas_med
     z = diff / sigma
@@ -251,7 +293,7 @@ def _diagnostics(results, n_recent: int, n_base: int) -> dict:
     """Counts and a few sample errors (URL query strings removed: signed links carry temporary credentials)."""
     import re
     errors = [re.sub(r"\?[^\s']*", "?…", g["error"]) for _, g, a in results if a is None and g.get("error")]
-    empty = sum(1 for _, g, a in results if a is not None and not np.isfinite(a).any())
+    empty = sum(1 for _, g, a in results if a is not None and not (a != NODATA16).any())
     return {"granules_found": {"recent": n_recent, "baseline": n_base}, "read_errors": len(errors),
             "all_cloud_or_outside": empty, "sample_errors": sorted(set(errors))[:3]}
 

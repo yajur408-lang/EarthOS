@@ -33,6 +33,11 @@ The in-app panel (`frontend/src/licences.ts`) mirrors this file.
 | ESA WorldCover 10 m 2021 v200 (COGs on AWS Open Data) | Land cover for the susceptibility layer | CC BY 4.0 | Yes, with attribution | © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium; Zanaga et al. 2022, doi:10.5281/zenodo.7254221 |
 | Terrain Tiles (as above) | Slope, drainage lines and HAND for the susceptibility layer | as above | Yes, with attribution | as above |
 | NASA Global Landslide Catalog export (2007–2017), bundled as `backend/app/screening/glc_events.csv.gz` | Past landslides for the backtest | NASA open data (data.gov listing); export notes refer to GLC terms: cite the papers | Yes, with attribution | Kirschbaum et al. 2010 (*Nat. Hazards* 52:561–575); Kirschbaum, Stanley & Zhou 2015 (*Geomorphology* 249:4–15) |
+| NOAA NCEI IBTrACS v04r01 since 1980, bundled as `backend/app/screening/data/ibtracs.csv.gz` | Tropical cyclones near a place | US Government work | Yes | Knapp et al. 2010; Gahtan et al. 2024, doi:10.25921/82ty-9e16 |
+| NOAA SPC tornado database 1950 onwards (US), bundled as `spc_tornadoes.csv.gz` | Tornado paths near a place | US Government work (public domain) | Yes | NOAA/NWS Storm Prediction Center |
+| USGS ComCat (FDSN event API) | Earthquakes M4.5+ near a place | US Government work (public domain) | Yes | USGS Earthquake Hazards Program |
+| GIBS hazard layers (GOES-East/West, Himawari, MODIS/VIIRS Combined Flood, OPERA DSWx-HLS/S1, OPERA DIST-ALERT-HLS, VIIRS Day/Night Band) | Live storm imagery, floods, water, 30 m disturbance alerts, night lights | NASA/NOAA open data; Sentinel-based OPERA layers also Copernicus terms | Yes, with attribution | GIBS acknowledgement; NASA OPERA; contains modified Copernicus Sentinel data |
+| HLS VI v2.0 NBR and NDWI bands | 30 m before/after change checks (burn scars, standing water) | as HLS VI | Yes, with attribution | as HLS VI |
 | CNE technical report, Tapezco landslide (2018), Municipalidad de Santa Ana open-data portal | One local event in the Santa Ana backtest (date, place, link) | Public report; cited and linked, not redistributed | Yes, as a citation | CNE, via datosabiertos.santaana.go.cr |
 
 ## Planned

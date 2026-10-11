@@ -121,3 +121,28 @@ details.method .sources li { word-break: break-word; }
 }
 .hz-date { margin: 0 0 10px; font-size: 12.5px; color: var(--muted); }
 .loss-progress .btn { justify-self: start; }
+
+/* Natural hazards near here */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin: 4px 0 8px; }
+.seg button { border: 0; background: none; padding: 5px 12px; font: inherit; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.seg button.on { background: var(--accent-soft); color: var(--accent-strong); font-weight: 500; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.chips button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12.5px; cursor: pointer; color: inherit; }
+.chips button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+.hz-events { list-style: none; margin: 0; padding: 0; }
+.hz-events li { border-radius: 10px; margin: 2px 0; }
+.hz-events li.on { background: var(--surface-2); }
+.hz-ev-head { display: flex; gap: 10px; align-items: center; width: 100%; padding: 7px 8px; border: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; border-radius: 10px; }
+.hz-ev-head:hover { background: var(--hover); }
+.hz-ev-head b { display: block; font-size: 13.5px; font-weight: 500; }
+.hz-ev-head small { color: var(--muted); font-size: 12px; }
+.hz-dot { flex: 0 0 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; color: #fff; }
+.hz-ev-body { padding: 0 10px 10px 44px; font-size: 13px; }
+.hz-ev-body p { margin: 4px 0 8px; }
+.hz-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.change-box { display: grid; gap: 6px; padding: 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.change-box .btn { justify-self: start; }
+.change-box small { color: var(--faint); }
+@media (max-width: 760px) {
+  .hz-ev-body { padding-left: 10px; }
+}

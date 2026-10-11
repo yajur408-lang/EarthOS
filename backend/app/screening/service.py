@@ -164,7 +164,7 @@ def _png(rgba: np.ndarray) -> bytes:
 
 # ------------------------------------------------------------------ forest loss (background job)
 
-LOSS_VERSION = 3  # bump to recompute stored forest-loss results
+LOSS_VERSION = 4  # bump to recompute stored forest-loss results
 
 
 def loss_key(lat: float, lon: float, half_km: float, end: dt.date) -> str:
@@ -260,3 +260,64 @@ def loss_ready() -> bool:
 
 __all__ = ["snap", "area", "susceptibility_result", "susceptibility_png", "start_loss", "loss_status",
            "loss_png_path", "default_loss_end", "LOSS", "GROUPS"]
+
+
+# ------------------------------------------------------------------ before/after change around an event (background job)
+
+CHANGE_COLORS = {"NDVI": [217, 70, 239, 230], "NBR": [255, 87, 34, 235], "NDWI": [0, 188, 212, 235]}
+
+
+def change_key(lat: float, lon: float, half_km: float, hazard: str, event: dt.date) -> str:
+    return f"{area_key(lat, lon, half_km)}_C{LOSS_VERSION}_{hazard}_{event.isoformat()}"
+
+
+def change_status(lat: float, lon: float, half_km: float, hazard: str, event: dt.date) -> dict:
+    key = change_key(lat, lon, half_km, hazard, event)
+    path = DIR / f"change_{key}.json"
+    if path.exists():
+        return {"status": "done", **json.loads(path.read_text())}
+    job = _jobs.get(key)
+    return {k: v for k, v in job.items() if k != "task"} if job else {"status": "not_started"}
+
+
+def change_png_path(lat: float, lon: float, half_km: float, hazard: str, event: dt.date):
+    return DIR / f"change_{change_key(lat, lon, half_km, hazard, event)}.png"
+
+
+def start_change(lat: float, lon: float, half_km: float, hazard: str, event: dt.date) -> dict:
+    from . import change
+    st = change_status(lat, lon, half_km, hazard, event)
+    if st["status"] in ("done", "running", "queued", "unavailable"):
+        return st
+    key = change_key(lat, lon, half_km, hazard, event)
+    job = _jobs[key] = {"status": "queued" if _sem and _sem.locked() else "running", "progress": 0.0, "started": time.time()}
+
+    def progress(p: float):
+        job["progress"] = round(p, 3)
+
+    async def go():
+        global _sem
+        _sem = _sem or asyncio.Semaphore(1)
+        async with _sem:
+            job["status"] = "running"
+            try:
+                a = await area(lat, lon, half_km)
+                g = _grid(a)
+                res = await change.run(a["lat"], a["lon"], a["slope"], g.dx_m * g.dy_m, hazard, event, progress)
+                mask = res.pop("mask", None)
+                if mask is not None:
+                    rgba = np.zeros(mask.shape + (4,), dtype=np.uint8)
+                    rgba[mask] = CHANGE_COLORS.get(res["index"], [217, 70, 239, 230])
+                    (DIR / f"change_{key}.png").write_bytes(_png(rgba))
+                res.update(bounds=g.bounds(), has_overlay=mask is not None,
+                           computed=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
+                DIR.mkdir(parents=True, exist_ok=True)
+                (DIR / f"change_{key}.json").write_text(json.dumps(res))
+                _jobs.pop(key, None)
+            except forest_loss.NeedsToken as e:
+                job.update(status="unavailable", error=str(e))
+            except Exception as e:  # noqa: BLE001
+                job.update(status="error", error=f"{type(e).__name__}: {e}"[:300])
+
+    job["task"] = asyncio.ensure_future(go())
+    return {k: v for k, v in job.items() if k != "task"}

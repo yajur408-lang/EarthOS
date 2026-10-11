@@ -346,6 +346,50 @@ export interface Backtest {
   notice: string
 }
 
+// ---------- natural hazards near a place ----------
+export type HazardType = 'cyclone' | 'tornado' | 'earthquake' | 'wildfire' | 'volcano' | 'flood' | 'landslide' | 'storm' | 'drought'
+export interface HazardEvent {
+  type: HazardType
+  type_name: string
+  title: string
+  date: string
+  lat: number
+  lon: number
+  distance_km: number
+  detail: string
+  severity: number
+  source: string
+  link?: string | null
+  path?: [number, number][]
+  satellite_check: string | null
+}
+export interface HazardEvents {
+  period: [string, string]
+  radius_km: Record<string, number>
+  counts: Partial<Record<HazardType, number>>
+  events: HazardEvent[]
+  errors: string[]
+  sources: Record<string, SourceRef>
+  coverage: string[]
+  notice: string
+}
+export interface ChangePatch {
+  id: number; label: string; lat: number; lon: number; area_ha: number; pixels: number; mean_slope_deg: number
+  before: number; after: number; change: number; robust_z: number
+}
+export interface ChangeResult {
+  hazard: HazardType; event_date: string; index: 'NDVI' | 'NBR' | 'NDWI'; index_name?: string; looks_for: string; label: string
+  patches: ChangePatch[]; note?: string; flagged_ha?: number; judged_share?: number
+  before_window: [string, string]; after_window: [string, string]
+  scenes: { before: number; after: number }; scene_dates?: { before: string[]; after: string[] }
+  qa: string; method?: string; source: SourceRef; bounds?: Susceptibility['bounds']; has_overlay?: boolean
+}
+export type ChangeStatus = (
+  | ({ status: 'done' } & ChangeResult)
+  | { status: 'running' | 'queued'; progress: number }
+  | { status: 'not_started' | 'unavailable' | 'error'; error?: string }
+) & { overlay: string; hazard: HazardType; event_date: string; area: { lat: number; lon: number; half_km: number } }
+
 export const api = {
   places: () => get<Place[]>('/api/places'),
   series: (p: { lat: number; lon: number; km: number; start_year: number; end_year: number; z: number; drop: number }, signal?: AbortSignal) =>
@@ -371,5 +415,9 @@ export const api = {
   forestLoss: (p: { lat: number; lon: number; half_km: number; end: string; start?: boolean }, signal?: AbortSignal) =>
     get<LossStatus>('/api/screening/forest-loss', { ...p, start: p.start ? 'true' : undefined }, signal),
   backtest: (lat: number, lon: number, signal?: AbortSignal) => get<Backtest>('/api/screening/backtest', { lat, lon }, signal),
+  hazardEvents: (p: { lat: number; lon: number; start?: string; end?: string }, signal?: AbortSignal) =>
+    get<HazardEvents>('/api/hazards/events', p, signal),
+  hazardChange: (p: { lat: number; lon: number; hazard: HazardType; date: string; start?: boolean }, signal?: AbortSignal) =>
+    get<ChangeStatus>('/api/hazards/change', { ...p, start: p.start ? 'true' : undefined }, signal),
   url: (path: string) => `${BASE}${path}`,
 }

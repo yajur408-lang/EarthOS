@@ -14,6 +14,8 @@ interface Props {
   onShowLoss: (on: boolean) => void
   onFly: (lat: number, lon: number) => void
   onRunLoss: () => void
+  /** "Natural hazards near here" (built by the app, which owns the map). */
+  natural?: React.ReactNode
   lat: number
   lon: number
 }
@@ -64,6 +66,7 @@ export default function HazardsPanel(p: Props) {
       <Notice d={d} />
       <p className="hz-date">Screening for <b>{prettyDate(d.date)}</b> · change the day with the date bar</p>
       <TriggerSection t={d.trigger} lat={p.lat} lon={p.lon} />
+      {p.natural}
       <SusceptibilitySection d={d} show={p.showSusc} onShow={p.onShowSusc} />
       <LossSection loss={p.loss} show={p.showLoss} onShow={p.onShowLoss} onFly={p.onFly} onRun={p.onRunLoss} />
     </div>

@@ -63,6 +63,16 @@ export default function LayersPanel({ base, overlays, opacity, sharp, onSharp, e
               </button>
             ))}
           </div>
+          <h3>Hazard layers <small>storms, floods, damage, outages</small></h3>
+          <div className="thumbs">
+            {LAYERS.filter((l) => l.kind === 'hazard').map((l) => (
+              <button key={l.id} className={`thumb overlay ${overlays.includes(l.id) ? 'on' : ''}`} onClick={() => onToggle(l.id)}
+                title={`${l.description} (${l.cadence})`} aria-pressed={overlays.includes(l.id)}>
+                <img src={thumbUrl(l, THUMB_DATE)} alt="" loading="lazy" />
+                <span>{l.title}</span>
+              </button>
+            ))}
+          </div>
           <label className="sharp-toggle">
             <input type="checkbox" checked={extras} onChange={(e) => onExtras(e.target.checked)} />
             <span><b>Show weather and nearby events</b><small>Adds Weather and Events tabs to the place card (optional context)</small></span>

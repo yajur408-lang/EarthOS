@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, type LossStatus, type Screening } from './api'
+import { api, type ChangeStatus, type HazardType, type LossStatus, type Screening } from './api'
 import { useFetch } from './useFetch'
 
 /**
@@ -50,4 +50,43 @@ export function useScreening(place: { lat: number; lon: number; country: string 
   }
 
   return { ...res, loss: status, runLoss }
+}
+
+/** A 30 m before/after change check for one event: asks for status, starts it on request, polls while it runs. */
+export function useChangeJob(place: { lat: number; lon: number } | null, sel: { hazard: HazardType; date: string } | null) {
+  const key = place && sel ? `${place.lat},${place.lon},${sel.hazard},${sel.date}` : null
+  const [state, setState] = useState<{ key: string; status: ChangeStatus } | null>(null)
+  const [nonce, setNonce] = useState(0)
+  const [startReq, setStartReq] = useState<string | null>(null)
+  useEffect(() => {
+    if (!key || !place || !sel) return
+    let stop = false
+    ;(async () => {
+      let first = true
+      while (!stop) {
+        try {
+          const st = await api.hazardChange({ lat: place.lat, lon: place.lon, hazard: sel.hazard, date: sel.date, start: first && startReq === key })
+          if (stop) return
+          setState({ key, status: st })
+          if (st.status !== 'running' && st.status !== 'queued') return
+        } catch {
+          /* keep polling */
+        }
+        first = false
+        await new Promise((r) => setTimeout(r, 4000))
+      }
+    })()
+    return () => {
+      stop = true
+    }
+  }, [key, nonce]) // eslint-disable-line react-hooks/exhaustive-deps
+  const status = state && state.key === key ? state.status : null
+  return {
+    status,
+    loading: !!key && !status,
+    run: () => {
+      setStartReq(key)
+      setNonce((n) => n + 1)
+    },
+  }
 }

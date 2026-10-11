@@ -232,7 +232,7 @@ async def read_window(client: httpx.AsyncClient, cog: Cog, col0: int, row0: int,
             last = batches[-1][-1][0]
             start = cog.offsets[batches[-1][0][0]]
             gap = cog.offsets[i] - (cog.offsets[last] + cog.counts[last])
-            if 0 <= gap < 256_000 and cog.offsets[i] + cog.counts[i] - start < 16_000_000:
+            if 0 <= gap < 256_000 and cog.offsets[i] + cog.counts[i] - start < 4_000_000:
                 batches[-1].append(item)
                 continue
         batches.append([item])

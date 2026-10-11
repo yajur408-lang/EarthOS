@@ -1,7 +1,7 @@
 // NASA GIBS layer catalogue. Identifiers, formats and tile matrix sets were checked
 // against https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/1.0.0/WMTSCapabilities.xml
 
-export type LayerKind = 'base' | 'overlay' | 'detail'
+export type LayerKind = 'base' | 'overlay' | 'detail' | 'hazard'
 
 export interface GibsLayer {
   id: string
@@ -103,6 +103,60 @@ LAYERS.push(
     kind: 'detail', format: 'png', matrixSet: '31.25m', timed: true, cadence: 'per pass',
     description: '30 m true colour from Landsat 8/9, harmonised by NASA.',
     credit: 'NASA HLS (Landsat 8/9)',
+  },
+)
+
+
+// Hazard layers: live weather satellites, flood and water maps, 30 m disturbance alerts and night lights.
+// Checked against GIBS GetCapabilities on 2026-10-10 (formats, matrix sets and date ranges).
+LAYERS.push(
+  {
+    id: 'goes-east', gibsId: 'GOES-East_ABI_GeoColor', title: 'GOES-East live (Americas)',
+    kind: 'hazard', format: 'png', matrixSet: '1km', timed: false, cadence: 'latest, every 10 min',
+    description: 'Latest geostationary image of the Americas and Atlantic: hurricanes, storm systems, smoke. Only the last ~60 days are kept, so it always shows the latest image.',
+  },
+  {
+    id: 'goes-west', gibsId: 'GOES-West_ABI_GeoColor', title: 'GOES-West live (Pacific)',
+    kind: 'hazard', format: 'png', matrixSet: '1km', timed: false, cadence: 'latest, every 10 min',
+    description: 'Latest geostationary image of the eastern Pacific and western Americas.',
+  },
+  {
+    id: 'himawari-ir', gibsId: 'Himawari_AHI_Band13_Clean_Infrared', title: 'Himawari live infrared (Asia-Pacific)',
+    kind: 'hazard', format: 'png', matrixSet: '2km', timed: false, cadence: 'latest, every 10 min',
+    description: 'Latest cloud-top infrared over Asia and the western Pacific: typhoon structure day and night.',
+  },
+  {
+    id: 'flood-modis', gibsId: 'MODIS_Combined_Flood_3-Day', title: 'Flood map (MODIS, 3-day)',
+    kind: 'hazard', format: 'png', matrixSet: '250m', timed: true, cadence: 'daily, from 2021',
+    description: 'NASA near-real-time flood product: surface water beyond normal, from 3 days of MODIS. Cloud shadow can be misread as water.',
+  },
+  {
+    id: 'flood-viirs', gibsId: 'VIIRS_Combined_Flood_3-Day', title: 'Flood map (VIIRS, 3-day)',
+    kind: 'hazard', format: 'png', matrixSet: '250m', timed: true, cadence: 'daily, from mid-2025',
+    description: 'The same flood product from VIIRS, which continues after MODIS.',
+  },
+  {
+    id: 'water-s1', gibsId: 'OPERA_L3_Dynamic_Surface_Water_Extent-Sentinel-1', title: 'Surface water, radar (OPERA, 30 m)',
+    kind: 'hazard', format: 'png', matrixSet: '31.25m', timed: true, cadence: 'per pass, from 2024 (North America)',
+    description: 'Water mapped from Sentinel-1 radar, which sees through cloud - useful during floods. Mostly North America.',
+    credit: 'NASA OPERA · contains modified Copernicus Sentinel data',
+  },
+  {
+    id: 'water-hls', gibsId: 'OPERA_L3_Dynamic_Surface_Water_Extent-HLS', title: 'Surface water, optical (OPERA, 30 m)',
+    kind: 'hazard', format: 'png', matrixSet: '31.25m', timed: true, cadence: 'per pass, from 2016',
+    description: 'Water mapped from Landsat/Sentinel-2 (HLS). Clouds leave gaps.',
+    credit: 'NASA OPERA · contains modified Copernicus Sentinel data',
+  },
+  {
+    id: 'dist-alert', gibsId: 'OPERA_L3_DIST-ALERT-HLS_Color_Index', title: 'Vegetation disturbance alerts (OPERA, 30 m)',
+    kind: 'hazard', format: 'png', matrixSet: '31.25m', timed: true, cadence: 'per pass, from 2023',
+    description: 'NASA alerts where vegetation cover dropped versus its usual state: tornado tracks, hurricane blowdown, fires, clearing, landslides.',
+    credit: 'NASA OPERA DIST-ALERT · contains modified Copernicus Sentinel data',
+  },
+  {
+    id: 'night-lights', gibsId: 'VIIRS_SNPP_DayNightBand_At_Sensor_Radiance', title: 'Night lights (VIIRS)',
+    kind: 'hazard', format: 'png', matrixSet: '500m', timed: true, cadence: 'nightly',
+    description: 'Night-time light seen by VIIRS. Compare nights before and after a storm to spot power outages (moonlight and cloud also change it).',
   },
 )
 

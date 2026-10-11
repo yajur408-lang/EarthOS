@@ -213,6 +213,42 @@ export const SOURCES: Source[] = [
     attribution: 'Comisión Nacional de Prevención de Riesgos y Atención de Emergencias (CNE), informe técnico, deslizamiento Tapezco, via datosabiertos.santaana.go.cr',
     link: 'https://datosabiertos.santaana.go.cr',
   },
+  {
+    name: 'NOAA NCEI IBTrACS v04r01 (tropical cyclone best tracks, since 1980)',
+    role: 'Hurricanes, typhoons and cyclones that passed near a place (bundled, refreshed by script)',
+    status: 'in use',
+    licence: 'US Government work (NOAA NCEI) - no restrictions; cite the dataset',
+    commercial: 'yes, with attribution',
+    attribution: 'Knapp, K. R. et al. (2010) BAMS 91:363-376; Gahtan, J. et al. (2024) IBTrACS v04r01, NOAA NCEI, doi:10.25921/82ty-9e16',
+    link: 'https://www.ncei.noaa.gov/products/international-best-track-archive',
+  },
+  {
+    name: 'NOAA Storm Prediction Center tornado database (US, since 1950)',
+    role: 'Tornado paths near a place (United States only; bundled)',
+    status: 'in use',
+    licence: 'US Government work (NOAA) - public domain',
+    commercial: 'yes, with attribution',
+    attribution: 'NOAA/NWS Storm Prediction Center, Severe Weather Database',
+    link: 'https://www.spc.noaa.gov/wcm/',
+  },
+  {
+    name: 'USGS Earthquake Catalog (ComCat, FDSN event API)',
+    role: 'Earthquakes M4.5+ near a place, any date',
+    status: 'in use',
+    licence: 'US Government work (USGS) - public domain',
+    commercial: 'yes, with attribution',
+    attribution: 'U.S. Geological Survey, Earthquake Hazards Program',
+    link: 'https://earthquake.usgs.gov/fdsnws/event/1/',
+  },
+  {
+    name: 'GIBS hazard layers: GOES-East/West and Himawari, MODIS/VIIRS flood maps, OPERA DSWx and DIST-ALERT, VIIRS night lights',
+    role: 'Live storm imagery, flood and water maps, 30 m vegetation-disturbance alerts and night lights',
+    status: 'in use',
+    licence: 'NASA/NOAA open data via GIBS; OPERA Sentinel-based layers also Copernicus terms (free, attribution)',
+    commercial: 'yes, with attribution',
+    attribution: 'GIBS acknowledgement; NASA OPERA (JPL); NOAA GOES; JMA Himawari via NASA GIBS; contains modified Copernicus Sentinel data',
+    link: 'https://nasa-gibs.github.io/gibs-api-docs/available-visualizations/',
+  },
 ]
 
 export const SOFTWARE = [

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type AnomalyEvent, type EventsResult, type Place, type Series, type StreetImage, type StreetNearby } from './api'
+import { api, type AnomalyEvent, type EventsResult, type HazardEvent, type HazardEvents, type HazardType, type Place, type Series, type StreetImage, type StreetNearby } from './api'
 import DateBar, { type CompareState } from './components/DateBar'
 import type { GlobeHandle, LayerSpec, Marker, ViewState } from './components/Globe'
 import LayersPanel from './components/LayersPanel'
@@ -9,7 +9,9 @@ import SearchBar, { type SearchPick } from './components/SearchBar'
 import Story, { type StoryControls } from './components/Story'
 import HazardsPanel from './components/HazardsPanel'
 import ScreeningFooter from './components/ScreeningFooter'
-import { useScreening } from './useScreening'
+import { useChangeJob, useScreening } from './useScreening'
+import NaturalHazards from './components/NaturalHazards'
+import { HAZARD_COLORS } from './hazardColors'
 import Icon from './components/Icon'
 import {
   buildReport, downloadReportHtml, exportChartImages, exportCsv, exportGeoJson, exportJson, exportPng, exportSavedPlaces,
@@ -189,6 +191,14 @@ export default function App() {
   // Hazard screening: loads with the Hazards tab, or while one of its map layers is on.
   const [hazardLayers, setHazardLayers] = useState({ susc: pilot, loss: pilot })
   const screening = useScreening(place, tab === 'hazards' || hazardLayers.susc || hazardLayers.loss, date)
+  // Natural hazards near the place (all years, or around the date bar's day) and a 30 m before/after check.
+  const [hazAround, setHazAround] = useState(false)
+  const [hazSel, setHazSel] = useState<HazardEvent | null>(null)
+  const [showChange, setShowChange] = useState(true)
+  const hazKey = pointKey && tab === 'hazards' ? `${pointKey}|${hazAround ? date : 'all'}` : null
+  const hazEvents = useFetch<HazardEvents>(hazKey, (s) => api.hazardEvents({
+    lat: pLat!, lon: pLon!, ...(hazAround ? { start: shiftDate(date, -60), end: shiftDate(date, 60) } : {}) }, s))
+  const change = useChangeJob(place, hazSel && hazSel.satellite_check ? { hazard: hazSel.type as HazardType, date: hazSel.date } : null)
   const eventsKey = pointKey && extras && tab === 'news' ? pointKey : null
   const events = useFetch<EventsResult>(eventsKey, (s) => api.events({ lat: pLat!, lon: pLon! }, s))
 
@@ -300,12 +310,17 @@ export default function App() {
       out.push({ layerId: 'screen-loss', image: { url: api.url(loss.overlay.replace(/end=[\d-]+/, `end=${end}`)), ...lossRes.bounds,
         credit: 'EarthOS forest-loss watch: NASA HLS VI v2.0 (contains modified Copernicus Sentinel data)' } })
     }
+    const ch = change.status
+    if (ch?.status === 'done' && ch.has_overlay && ch.bounds && showChange) {
+      out.push({ layerId: 'screen-change', image: { url: api.url(ch.overlay), ...ch.bounds,
+        credit: 'EarthOS change check: NASA HLS VI v2.0 (contains modified Copernicus Sentinel data)' } })
+    }
     for (const id of overlays) {
       if (compare.on && id === compare.layerId) continue
       out.push({ layerId: id, date, alpha: layerById(id).credit ? 1 : opacity })
     }
     return out
-  }, [base, date, overlays, opacity, compare, sharpOn, sharp.pass, sharp.fill, screening.data, screening.loss, hazardLayers])
+  }, [base, date, overlays, opacity, compare, sharpOn, sharp.pass, sharp.fill, screening.data, screening.loss, hazardLayers, change.status, showChange])
 
   // Markers: photo locations on the Street tab, events/earthquakes on the News tab.
   const markers = useMemo<Marker[]>(() => {
@@ -315,6 +330,13 @@ export default function App() {
         color: streetOpen?.id === i.id ? '#fbbc04' : '#1a73e8',
       }))
     }
+    if (place && tab === 'hazards' && hazEvents.data) {
+      return hazEvents.data.events.slice(0, 150).map((e, i) => ({
+        id: `h:${i}`, lat: e.lat, lon: e.lon, color: HAZARD_COLORS[e.type],
+        size: hazSel && hazSel.title === e.title && hazSel.date === e.date ? 14 : 8,
+        label: hazSel && hazSel.title === e.title && hazSel.date === e.date ? e.title : undefined,
+      }))
+    }
     if (place && tab === 'news' && events.data) {
       return [
         ...events.data.natural.map((e, i) => ({ id: `n:${i}`, lat: e.lat, lon: e.lon, color: '#e8710a', size: 11, label: e.title })),
@@ -322,13 +344,16 @@ export default function App() {
       ]
     }
     return []
-  }, [place, tab, street.data, streetOpen, events.data])
+  }, [place, tab, street.data, streetOpen, events.data, hazEvents.data, hazSel])
 
   const onMarker = useCallback((id: string) => {
     const [kind, ...rest] = id.split(':')
     if (kind === 's') {
       const img = street.data?.items.find((i) => i.provider === rest[0] && i.id === rest[1])
       if (img) setStreetOpen(img)
+    } else if (kind === 'h' && hazEvents.data) {
+      const e = hazEvents.data.events[+rest[0]]
+      if (e) setHazSel(e)
     } else if (kind === 'n' && events.data) {
       const e = events.data.natural[+rest[0]]
       if (e?.url) window.open(e.url, '_blank', 'noopener')
@@ -336,7 +361,7 @@ export default function App() {
       const q = events.data.earthquakes[+rest[0]]
       if (q) window.open(q.url, '_blank', 'noopener')
     }
-  }, [street.data, events.data])
+  }, [street.data, events.data, hazEvents.data])
 
   const pin = useMemo(() => (place ? { lat: place.lat, lon: place.lon, km: place.km } : null), [place])
   const onDate = useCallback((d: string) => setDate(d), [])
@@ -447,7 +472,25 @@ export default function App() {
               }}
               showLoss={hazardLayers.loss} onShowLoss={(on) => setHazardLayers((h) => ({ ...h, loss: on }))}
               onFly={(lat, lon) => { setHazardLayers((h) => ({ ...h, loss: true })); globe.current?.flyTo(lat, lon, 3500, -50) }}
-              onRunLoss={() => { screening.runLoss().catch((e: Error) => setNotice(`Couldn't start: ${e.message}`)) }} />
+              onRunLoss={() => { screening.runLoss().catch((e: Error) => setNotice(`Couldn't start: ${e.message}`)) }}
+              natural={(
+                <NaturalHazards data={hazEvents.data} loading={hazEvents.loading} error={hazEvents.error}
+                  around={hazAround} onAround={setHazAround} date={date}
+                  selected={hazSel} onSelect={setHazSel} change={change} showChange={showChange} onShowChange={setShowChange}
+                  onFly={(lat, lon) => globe.current?.flyTo(lat, lon, 30_000, -45)}
+                  onGoTo={(e) => {
+                    setDate(e.date)
+                    const layer = suggestedLayer(e)
+                    if (layer) setOverlays((o) => (o.includes(layer) ? o : [...o, layer]))
+                    setNotice(`Showing ${e.date}${layer ? ` with ${layerById(layer).title}` : ''}.`)
+                  }}
+                  onBeforeAfter={(e) => {
+                    const layer = e.type === 'flood' && e.date >= '2021-01-04' ? 'flood-modis' : e.date >= '2012-01-20' ? 'viirs-truecolor' : 'modis-truecolor'
+                    setCompare({ on: true, layerId: layer, a: shiftDate(e.date, -7), b: shiftDate(e.date, e.type === 'flood' ? 2 : 5) })
+                    setSheet('peek')
+                    globe.current?.flyTo(e.lat, e.lon, e.type === 'cyclone' ? 900_000 : 120_000, -60)
+                  }} />
+              )} />
           )}
           onClose={() => setPlace(null)}
         />
@@ -525,4 +568,12 @@ function StatusBar({ cursor, view, terrain, onLicences }: { cursor: Bus<Cursor>;
       <button className="link" onClick={onLicences}><span className="wide-only">Data sources &amp; licences</span><span className="narrow-only">Sources</span></button>
     </footer>
   )
+}
+
+/** The GIBS layer that best shows an event's aftermath on its day, if any. */
+function suggestedLayer(e: HazardEvent): string | null {
+  if (e.type === 'flood') return e.date >= '2021-01-04' ? 'flood-modis' : null
+  if (e.type === 'wildfire') return 'fires'
+  if (['tornado', 'cyclone', 'storm', 'landslide', 'earthquake'].includes(e.type) && e.date >= '2023-01-01') return 'dist-alert'
+  return null
 }

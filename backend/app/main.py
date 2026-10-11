@@ -410,12 +410,13 @@ def _screen_area(lat: float, lon: float, half_km: float | None):
     return service.snap(lat, lon, half_km)
 
 
-DateQ = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Day to screen (default: today)")
+def DateQ(description: str = "YYYY-MM-DD"):  # noqa: N802 - a fresh Query per parameter (FastAPI can't share one)
+    return Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description=description)
 
 
 @app.get("/api/screening")
 async def screening(lat: float = LatQ, lon: float = LonQ, half_km: float | None = Query(None, ge=1, le=8),
-                    country: str | None = None, date: str | None = DateQ):
+                    country: str | None = None, date: str | None = DateQ("Day to screen (default: today)")):
     """Susceptibility (and the class at the point), the rainfall trigger for the chosen day, and the forest-loss watch
     for the 90 days up to that day. Recent days start the forest-loss job automatically; older ones on request."""
     from .screening import service, trigger
@@ -453,11 +454,56 @@ def _loss_payload(clat: float, clon: float, h: float, day: dt.date, start: bool 
 
 @app.get("/api/screening/forest-loss")
 async def screening_loss(lat: float = LatQ, lon: float = LonQ, half_km: float | None = Query(None, ge=1, le=8),
-                         date: str | None = DateQ, end: str | None = DateQ, start: bool = False):
+                         date: str | None = DateQ(), end: str | None = DateQ(), start: bool = False):
     """Status (and the result when done) of the forest-loss watch for a day. Pass start=true to run it if needed."""
     clat, clon, h = _screen_area(lat, lon, half_km)
     day = dt.date.fromisoformat(end or date) if (end or date) else dt.date.today()
     return {**_loss_payload(clat, clon, h, day, start=start or None), "notice": SCREENING_NOTICE}
+
+
+@app.get("/api/hazards/events")
+async def hazard_events(lat: float = LatQ, lon: float = LonQ, start: str | None = DateQ("from (default 1980-01-01)"), end: str | None = DateQ("to (default today)")):
+    """Tropical cyclones, tornadoes (US), earthquakes, wildfires, volcanoes, floods, storms and landslides near a place,
+    with the satellite check that suits each one."""
+    from .screening import disasters
+    s = dt.date.fromisoformat(start) if start else dt.date(1980, 1, 1)
+    e = dt.date.fromisoformat(end) if end else dt.date.today()
+    return {**(await disasters.near(round(lat, 3), round(lon, 3), s, e)), "notice": SCREENING_NOTICE}
+
+
+HazardQ = Query(..., pattern="^(cyclone|tornado|landslide|earthquake|wildfire|volcano|flood|storm)$")
+
+
+@app.get("/api/hazards/change")
+async def hazard_change(lat: float = LatQ, lon: float = LonQ, hazard: str = HazardQ,
+                        date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"), half_km: float | None = Query(None, ge=1, le=8),
+                        start: bool = False):
+    """30 m before/after change around an event date (background job; poll until done, start=true to run)."""
+    from .screening import service
+    clat, clon, h = _screen_area(lat, lon, half_km)
+    day = dt.date.fromisoformat(date)
+    if day < dt.date(2013, 6, 1):
+        st = {"status": "unavailable", "error": "30 m HLS imagery starts in 2013, so events before then can't be checked."}
+    else:
+        st = service.change_status(clat, clon, h, hazard, day)
+        if not service.loss_ready() and st["status"] == "not_started":
+            st = {"status": "unavailable", "error": "The 30 m change check needs a NASA Earthdata token on the server."}
+        elif start and st["status"] in ("not_started", "error"):
+            st = service.start_change(clat, clon, h, hazard, day)
+    return {**st, "area": {"lat": clat, "lon": clon, "half_km": h}, "hazard": hazard, "event_date": day.isoformat(),
+            "overlay": f"/api/hazards/change.png?lat={clat}&lon={clon}&half_km={h}&hazard={hazard}&date={day.isoformat()}",
+            "notice": SCREENING_NOTICE}
+
+
+@app.get("/api/hazards/change.png")
+async def hazard_change_png(lat: float = LatQ, lon: float = LonQ, half_km: float = Query(..., ge=1, le=8), hazard: str = HazardQ,
+                            date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    from .screening import service
+    clat, clon, h = service.snap(lat, lon, half_km)
+    path = service.change_png_path(clat, clon, h, hazard, dt.date.fromisoformat(date))
+    if not path.exists():
+        raise HTTPException(404, "No change overlay for this event yet.")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/api/screening/susceptibility.png")

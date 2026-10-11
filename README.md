@@ -16,6 +16,11 @@ Pages: `/` (landing, Santa Ana pilot), `/explore` (the globe; `/explore?pilot=sa
   range, QA and number of baseline years. Needs `EARTHDATA_TOKEN`; runs as a background job and is cached.
 - **Rainfall trigger:** forecast 24/72 h rain (MET Norway), observed 7-day rain and root-zone soil wetness (NASA POWER)
   → Watch / Warning. All thresholds are in `backend/app/screening/screening.toml`.
+- **Natural hazards near any place:** tropical cyclones (NOAA IBTrACS, 1980+), tornadoes (NOAA SPC, US, 1950+),
+  earthquakes (USGS), wildfires/volcanoes/floods/storms (NASA EONET) and landslides, each with a **30 m before/after
+  satellite check** (HLS NDVI drop for wind/tornado/landslide damage, NBR drop for burn scars, NDWI rise for flood
+  water). Hazard layers: live GOES/Himawari, flood maps, OPERA water and disturbance alerts, VIIRS night lights.
+  Refresh the bundled cyclone/tornado catalogues with `python -m scripts.build_hazard_catalogs` from `backend/`.
 - **Backtest:** the rules replayed over daily rain since 2001 and scored against NASA's Global Landslide Catalog and
   local reports (hit rate, false-alarm rate).
 
