@@ -235,7 +235,7 @@ function LossSection({ loss, show, onShow, onFly, onRun }: { loss: LossStatus | 
           <small>A first run reads a few hundred satellite scenes and can take several minutes; the result is then kept.</small>
         </div>
       )}
-      {(loss.status === 'unavailable' || loss.status === 'error') && <div className="alert soft">{loss.error}</div>}
+      {(loss.status === 'unavailable' || loss.status === 'error' || loss.status === 'busy') && <div className="alert soft">{loss.error}</div>}
       {result && (
         <>
           {loss.status !== 'done' && <p className="hint">Showing the last finished run (to {prettyDate(result.recent_window[1])}).</p>}

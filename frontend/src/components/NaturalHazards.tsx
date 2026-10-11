@@ -107,7 +107,7 @@ function EventDetail({ e, change, showChange, onShowChange, onGoTo, onBeforeAfte
               <div className="bar"><i style={{ width: `${Math.max(3, (st.status === 'running' ? st.progress : 0) * 100)}%` }} /></div>
             </div>
           )}
-          {(st?.status === 'unavailable' || st?.status === 'error') && (
+          {(st?.status === 'unavailable' || st?.status === 'error' || st?.status === 'busy') && (
             <div className="alert soft">{st.error}{st.status === 'error' && <> <button className="link" onClick={change.run}>Try again</button></>}</div>
           )}
           {st?.status === 'done' && (

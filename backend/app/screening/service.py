@@ -26,6 +26,15 @@ PNG_VERSION = 3  # bump when overlay colours change
 
 _inflight: dict[str, asyncio.Task] = {}
 _jobs: dict[str, dict] = {}  # forest-loss jobs: key -> {"status", "progress", "started", "error"}
+MAX_PENDING_JOBS = 3  # running + queued satellite jobs; each reads hundreds of NASA files, so the queue is capped
+
+
+def _queue_full() -> dict | None:
+    pending = sum(1 for j in _jobs.values() if j.get("status") in ("running", "queued"))
+    if pending >= MAX_PENDING_JOBS:
+        return {"status": "busy", "error": f"The server is already running {pending} satellite checks; try again in a few "
+                                           "minutes. (The queue is capped so one visitor can't tie it up for everyone.)"}
+    return None
 _sem: asyncio.Semaphore | None = None
 HLS_START = dt.date(2014, 1, 1)  # HLS Landsat 8 VI from Apr 2013; a baseline needs at least one earlier year
 
@@ -201,6 +210,8 @@ def start_loss(lat: float, lon: float, half_km: float, end: dt.date) -> dict:
     if st["status"] in ("done", "running", "queued", "unavailable"):
         return st
     key = loss_key(lat, lon, half_km, end)
+    if (full := _queue_full()) is not None:
+        return full
     job = _jobs[key] = {"status": "queued" if _sem and _sem.locked() else "running", "progress": 0.0, "started": time.time()}
 
     def progress(p: float):
@@ -309,6 +320,8 @@ def start_change(lat: float, lon: float, half_km: float, hazard: str, event: dt.
     if st["status"] in ("done", "running", "queued", "unavailable"):
         return st
     key = change_key(lat, lon, half_km, hazard, event)
+    if (full := _queue_full()) is not None:
+        return full
     job = _jobs[key] = {"status": "queued" if _sem and _sem.locked() else "running", "progress": 0.0, "started": time.time()}
 
     def progress(p: float):

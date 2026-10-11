@@ -321,7 +321,7 @@ export interface LossResult {
 export type LossStatus = (
   | ({ status: 'done' } & LossResult)
   | { status: 'running' | 'queued'; progress: number; started: number }
-  | { status: 'not_started' | 'unavailable' | 'error'; error?: string }
+  | { status: 'not_started' | 'unavailable' | 'error' | 'busy'; error?: string }
 ) & { end?: string; latest?: boolean; overlay?: string; previous?: LossResult & { end: string } }
 export interface Screening {
   area: { lat: number; lon: number; half_km: number }
@@ -411,7 +411,7 @@ export interface ChangeResult {
 export type ChangeStatus = (
   | ({ status: 'done' } & ChangeResult)
   | { status: 'running' | 'queued'; progress: number }
-  | { status: 'not_started' | 'unavailable' | 'error'; error?: string }
+  | { status: 'not_started' | 'unavailable' | 'error' | 'busy'; error?: string }
 ) & { overlay: string; hazard: HazardType; event_date: string; area: { lat: number; lon: number; half_km: number } }
 
 // ---------- where to inspect first ----------

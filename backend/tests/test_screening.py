@@ -327,3 +327,22 @@ def test_job_errors_never_leak_signed_urls_or_tokens():
     msg = service._safe_error(e)
     assert "SECRET" not in msg and "abc" not in msg and "eyJhbGciOi" not in msg
     assert msg.startswith("RuntimeError: 403")
+
+
+
+def test_satellite_job_queue_is_capped(monkeypatch):
+    from app.screening import service
+
+    monkeypatch.setattr(service, "_jobs", {f"k{i}": {"status": "running"} for i in range(service.MAX_PENDING_JOBS)})
+    monkeypatch.setattr(service, "loss_status", lambda *a: {"status": "not_started"})
+    st = service.start_loss(9.9, -84.2, 3.0, dt.date(2024, 1, 1))
+    assert st["status"] == "busy" and "try again" in st["error"]
+
+
+def test_missing_rain_never_counts_as_dry():
+    days = pd.date_range("2010-01-01", "2010-01-20")
+    rain = pd.Series(0.0, index=days)
+    rain["2010-01-10"] = float("nan")
+    levels = trigger.hindcast(pd.DataFrame({"precip_mm": rain, "soil_wetness": 0.5}))
+    assert pd.isna(levels.loc["2010-01-10", "fc24"])  # not silently 0 mm
+    assert int(levels["level"].max()) == 0

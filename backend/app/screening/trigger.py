@@ -200,7 +200,9 @@ def events_near(lat: float, lon: float, radius_km: float) -> list[dict]:
 
 def hindcast(clim: pd.DataFrame) -> pd.DataFrame:
     """Alert level per day using observed rain as a perfect forecast."""
-    rain = clim["precip_mm"].fillna(0.0)
+    # Missing rain stays missing: rules can't fire on it (comparisons with NaN are False), and the backtest reports
+    # how many days were missing instead of silently treating them as dry.
+    rain = clim["precip_mm"]
     soil = clim["soil_wetness"]
     df = pd.DataFrame({
         "fc24": rain,
@@ -374,6 +376,7 @@ async def backtest(lat: float, lon: float) -> dict:
         "match_days": window,
         "scores": scores,
         "blocks": blocks,
+        "days_missing_rain": int(levels.loc[pd.Timestamp(period[0]):pd.Timestamp(period[1]), "fc24"].isna().sum()),
         "split_note": ("The thresholds were set by judgment before scoring, not fitted to these events. The earlier and "
                        "later blocks are reported separately so any future tuning can be done on the earlier block and "
                        "judged on the later one."),
