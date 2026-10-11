@@ -122,8 +122,14 @@ async def open_cog(client: httpx.AsyncClient, url: str, headers: dict | None = N
     def one(t: int, default=None):
         return tags[t][0] if t in tags else default
 
-    if 322 not in tags:
-        raise CogError("striped TIFFs are not supported (need a tiled COG)")
+    if 322 in tags:
+        tile_w, tile_h, offsets, counts = one(322), one(323), list(tags[324]), list(tags[325])
+    elif 273 in tags:
+        # Striped TIFF: treat each strip as a full-width tile RowsPerStrip high.
+        tile_w, tile_h = one(256), min(one(278, one(257)), one(257))
+        offsets, counts = list(tags[273]), list(tags[279])
+    else:
+        raise CogError("TIFF has neither tiles nor strips")
     bits = one(258, 8)
     fmt = one(339, 1)
     if (fmt, bits) not in _DTYPES:
@@ -148,8 +154,8 @@ async def open_cog(client: httpx.AsyncClient, url: str, headers: dict | None = N
         except ValueError:
             pass
     return Cog(
-        url=url, headers=headers, width=one(256), height=one(257), tile_w=one(322), tile_h=one(323),
-        offsets=list(tags[324]), counts=list(tags[325]), compression=one(259, 1), predictor=one(317, 1),
+        url=url, headers=headers, width=one(256), height=one(257), tile_w=tile_w, tile_h=tile_h,
+        offsets=offsets, counts=counts, compression=one(259, 1), predictor=one(317, 1),
         dtype=np.dtype(bo + _DTYPES[(fmt, bits)]),
         origin_x=tie[3] - tie[0] * scale[0], origin_y=tie[4] + tie[1] * scale[1],
         res_x=scale[0], res_y=scale[1], epsg=epsg, nodata=nodata, gdal_metadata=one(42112, "") or "",
@@ -197,7 +203,9 @@ def _decode(cog: Cog, data: bytes) -> np.ndarray:
         raw = data
     else:
         raise CogError(f"unsupported compression {cog.compression}")
-    tile = np.frombuffer(raw, dtype=cog.dtype, count=cog.tile_w * cog.tile_h).reshape(cog.tile_h, cog.tile_w)
+    n = min(len(raw) // cog.dtype.itemsize, cog.tile_w * cog.tile_h)  # the last strip may be shorter
+    n -= n % cog.tile_w
+    tile = np.frombuffer(raw, dtype=cog.dtype, count=n).reshape(-1, cog.tile_w)
     if cog.predictor == 2:
         tile = np.cumsum(tile, axis=1, dtype=cog.dtype)
     elif cog.predictor == 3:
@@ -213,15 +221,30 @@ async def read_window(client: httpx.AsyncClient, cog: Cog, col0: int, row0: int,
     down = (cog.height + cog.tile_h - 1) // cog.tile_h
     tc0, tc1 = max(col0 // cog.tile_w, 0), min((col1 - 1) // cog.tile_w, across - 1)
     tr0, tr1 = max(row0 // cog.tile_h, 0), min((row1 - 1) // cog.tile_h, down - 1)
-    for tr in range(tr0, tr1 + 1):
-        for tc in range(tc0, tc1 + 1):
-            i = tr * across + tc
-            if not cog.counts[i]:
+    need = [(tr * across + tc, tr, tc) for tr in range(tr0, tr1 + 1) for tc in range(tc0, tc1 + 1)
+            if cog.counts[tr * across + tc]]
+    # Fetch neighbouring blocks in one request (strips are usually stored back to back).
+    need.sort(key=lambda t: cog.offsets[t[0]])
+    batches: list[list[tuple[int, int, int]]] = []
+    for item in need:
+        i = item[0]
+        if batches:
+            last = batches[-1][-1][0]
+            start = cog.offsets[batches[-1][0][0]]
+            gap = cog.offsets[i] - (cog.offsets[last] + cog.counts[last])
+            if 0 <= gap < 256_000 and cog.offsets[i] + cog.counts[i] - start < 16_000_000:
+                batches[-1].append(item)
                 continue
-            tile = _decode(cog, await _range(client, cog.url, cog.headers, cog.offsets[i], cog.counts[i]))
+        batches.append([item])
+    for batch in batches:
+        start = cog.offsets[batch[0][0]]
+        end = max(cog.offsets[i] + cog.counts[i] for i, _, _ in batch)
+        blob = await _range(client, cog.url, cog.headers, start, end - start)
+        for i, tr, tc in batch:
+            tile = _decode(cog, blob[cog.offsets[i] - start:cog.offsets[i] - start + cog.counts[i]])
             y0, x0 = tr * cog.tile_h, tc * cog.tile_w
-            sy0, sy1 = max(row0, y0), min(row1, y0 + cog.tile_h, cog.height)
-            sx0, sx1 = max(col0, x0), min(col1, x0 + cog.tile_w, cog.width)
+            sy0, sy1 = max(row0, y0), min(row1, y0 + tile.shape[0], cog.height)
+            sx0, sx1 = max(col0, x0), min(col1, x0 + tile.shape[1], cog.width)
             if sy0 < sy1 and sx0 < sx1:
                 out[sy0 - row0:sy1 - row0, sx0 - col0:sx1 - col0] = tile[sy0 - y0:sy1 - y0, sx0 - x0:sx1 - x0]
     return out

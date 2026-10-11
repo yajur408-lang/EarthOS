@@ -93,3 +93,45 @@ def test_loss_windows_same_season():
     years = [b[0] for b in base]
     assert years == [2025, 2024, 2023, 2022, 2021]
     assert base[0][1] == dt.date(2025, 6, 22) and base[0][2] == dt.date(2025, 10, 20)
+
+
+def _serve(blob: bytes):
+    import httpx
+
+    def handler(request):
+        rng = request.headers.get("Range")
+        if rng:
+            a, b = rng.split("=")[1].split("-")
+            return httpx.Response(206, content=blob[int(a):int(b) + 1])
+        return httpx.Response(200, content=blob)
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+def test_cog_reads_striped_tiffs_deflate_and_lzw():
+    import asyncio
+    import io
+
+    from PIL import Image, TiffImagePlugin
+
+    from app.screening import cog
+
+    arr = (np.arange(300 * 200, dtype=np.uint16) % 5000).reshape(300, 200)
+    for comp in ("tiff_adobe_deflate", "tiff_lzw"):
+        info = TiffImagePlugin.ImageFileDirectory_v2()
+        info[33550] = (30.0, 30.0, 0.0)
+        info[33922] = (0.0, 0.0, 0.0, 500000.0, 1100000.0, 0.0)
+        info.tagtype[33550] = info.tagtype[33922] = 12
+        info[278] = 16  # rows per strip
+        buf = io.BytesIO()
+        Image.fromarray(arr).save(buf, "TIFF", compression=comp, tiffinfo=info)
+
+        async def go():
+            async with _serve(buf.getvalue()) as client:
+                f = await cog.open_cog(client, "http://x/f.tif")
+                win = await cog.read_window(client, f, 10, 40, 150, 260)
+                pts = await cog.sample(client, f, np.array([500000 + 30 * 7.5]), np.array([1100000 - 30 * 123.5]))
+                return f, win, pts
+        f, win, pts = asyncio.run(go())
+        assert f.tile_w == 200 and f.origin_x == 500000.0
+        assert np.array_equal(win, arr[40:260, 10:150]), comp
+        assert pts[0] == arr[123, 7]
