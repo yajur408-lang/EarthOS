@@ -10,14 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@fontsource/ibm-plex-mono": "5.2.7",
-    "@fontsource/ibm-plex-sans": "5.2.8",
-    "@fontsource/newsreader": "5.2.10",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "@fontsource/newsreader": "5.3.0",
     "@photo-sphere-viewer/core": "^5.15.1",
     "cesium": "^1.146.0",
     "plotly.js-dist-min": "^4.1.2",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "three": "^0.186.1",
     "vite-plugin-static-copy": "^4.1.1"
   },
@@ -27,8 +27,8 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
-    "oxlint": "^1.81.0",
+    "oxlint": "^1.90.0",
     "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.5"
   }
 }
